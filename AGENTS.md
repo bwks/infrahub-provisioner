@@ -9,6 +9,10 @@ The first milestone is basic IPAM: IP namespaces, prefixes, subnets, IP addresse
 and VRFs. Keep this milestone small. Automatic address allocation and relationships
 to Azure resources are deferred.
 
+The schemas-only milestone is complete. The seed workflow manages the agreed
+19 special-purpose prefixes in the `global` namespace from `data/ipam.yaml`.
+Do not invent operational allocations or modify upstream schemas.
+
 This repository owns Infrahub schemas, bootstrap/reference data, provisioning
 automation, and eventually validated data interfaces for Terraform/OpenTofu
 consumers. Azure deployment code and execution belong in a separate project.
@@ -28,6 +32,12 @@ At project initialization on 2026-09-08:
 These are observations, not permanent assumptions. Inspect the current server,
 schema, and repository before making changes. Update this guidance as working
 commands and implementation conventions become established.
+
+The first schema implementation now uses `uv`, SDK `1.22.1`, unmodified upstream
+YAML under `schemas/`, and the built-in `IpamNamespace`. See [README.md](README.md) for current
+deployment status and verified commands, and
+[schema provenance](third_party/schema-library/README.md) for the upstream pin and
+required base dependencies.
 
 ## Lab access and API
 
@@ -66,13 +76,17 @@ the target Infrahub branch explicitly for provisioning and validation.
 
 ## Implementation conventions
 
+- Use pytest for tests and Typer for project CLI tools. Test CLI behavior with
+  Typer’s CliRunner and mock SDK calls so the default test suite stays offline.
+
 - Use YAML for schemas and declarative bootstrap/reference data, with the official
   Python SDK and `infrahubctl` for provisioning and inspection.
 - Before choosing dependencies, inspect the installed server version and consult
   the SDK compatibility matrix. Pin compatible dependencies and schema sources.
 - Treat the official OpsMill Schema Library as the requested module registry.
   Inspect its metadata and schema relationships, reuse suitable models, preserve
-  attribution, and record the upstream revision and local adaptations.
+  attribution, and record the upstream revision. Use upstream schemas unchanged;
+  do not trim, reformat, or customize vendored YAML. Include required dependencies.
 - Load required base schemas and extension dependencies in order. Avoid unrelated
   optional extensions. The library contains experimental examples, so validate
   compatibility instead of assuming every schema is production-ready or compatible
@@ -85,6 +99,18 @@ the target Infrahub branch explicitly for provisioning and validation.
 - Validate schema changes on a dedicated Infrahub branch before integration.
 - Document actual setup, provisioning, and validation commands when implemented.
   Do not present planned commands as existing tools.
+- Use `uv sync --locked` for setup. Run `scripts/check_schema.py --branch <branch>`
+  through `uv run python` for schema validation: the pinned upstream CLI check can
+  return zero on server rejection. Load with `infrahubctl schema load schemas` and
+  an explicit `--branch`, then run `scripts/verify_schema.py` against that branch.
+- Run `uv run pytest` for check-command regression
+  tests and `uv run ruff check scripts tests` plus `uv run ruff format --check scripts
+  tests` for Python changes. Live verification reads schema and counts only;
+  keep test fixtures offline. Seed only the catalog data explicitly requested by
+  the user during live integration checks.
+- Update [README.md](README.md) in the same change whenever setup, commands,
+  configuration, supported capabilities, or milestone status changes. Keep current
+  functionality distinct from planned work, and document only verified commands.
 
 ## Initial IPAM model
 
@@ -105,7 +131,7 @@ the target Infrahub branch explicitly for provisioning and validation.
 
 After basic IPAM works, evaluate the Schema Library's experimental Azure extension
 for tenants, subscriptions, resource groups, regions, virtual networks, and subnets.
-Validate and adapt it before loading it or connecting Azure objects to IPAM.
+Validate it unchanged before loading it or connecting Azure objects to IPAM.
 Prepare validated desired-state data for external Terraform/OpenTofu consumers;
 the choice of runner and downstream interface belongs to that later milestone.
 
@@ -116,8 +142,10 @@ Useful optional additions, introduced only when needed:
 - Environment and tagging conventions: consistent classification of resources.
 - Service/application ownership: connect infrastructure to the services it supports.
 
-Some additions may require local schema extensions. Security policies, connectivity
-models, and automatic IP allocation remain future candidates, not initial scope.
+Use unmodified upstream modules for later additions as well. The required base
+already supplies organization/location foundations; further optional extensions
+remain deferred. Security policies, connectivity models, and automatic IP
+allocation remain future candidates, not initial scope.
 
 ## Validation expectations
 
@@ -153,3 +181,14 @@ access limitations. Distinguish local checks from checks run against Infrahub.
 - [SDK configuration](https://docs.infrahub.app/python-sdk/reference/config)
 - [SDK compatibility matrix](https://docs.infrahub.app/python-sdk/reference/compatibility)
 - [infrahubctl](https://docs.infrahub.app/infrahubctl/infrahubctl)
+
+## IPAM seed workflow
+
+- Use `uv run python scripts/seed_ipam.py --branch <branch>` for read-only preview;
+  add `--apply` to create missing catalog objects. The optional `--data` selects YAML.
+- Preflight all seed-field conflicts before writes. Never overwrite existing edits
+  or delete objects. Partial failures are not rolled back; inspect and rerun.
+- Identify prefixes by namespace plus canonical CIDR. Preserve the existing
+  `default` namespace and its default flag; `global` is not the default namespace.
+- Catalog status `reserved` is not IANA reserved-by-protocol metadata. No allocation
+  pools, VRFs, individual address objects, or schema modifications are seeded.

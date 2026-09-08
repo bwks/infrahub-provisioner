@@ -1,0 +1,26 @@
+{
+  "repository": "https://github.com/opsmill/schema-library",
+  "revision": "6116e93678c4c65d6a625163367665e11b792151",
+  "files": {
+    "schemas/dcim.yml": {
+      "upstream": "base/dcim.yml",
+      "sha256": "81df2eb8cc0a58c496c3292c6349591695048bf1a036b1ccef5190842bc16c9e"
+    },
+    "schemas/ipam.yml": {
+      "upstream": "base/ipam.yml",
+      "sha256": "6d31dc0307f9053c334e028b57c2d6fca1fa51741a18cfebfbfd3ac35a9fe588"
+    },
+    "schemas/location.yml": {
+      "upstream": "base/location.yml",
+      "sha256": "afef7a770c05a8110295bd8e6d7f12348cf260851b9f3da828edb6ae8c53f926"
+    },
+    "schemas/organization.yml": {
+      "upstream": "base/organization.yml",
+      "sha256": "082e8536f389d5ad971f2808068234a3dab6c48249230db9ec1aa308124e5fff"
+    },
+    "schemas/vrf.yml": {
+      "upstream": "extensions/vrf/vrf.yml",
+      "sha256": "3224b9af367e535a105233c210d12617faca8b28d55b97aad3d48e70ae4f852e"
+    }
+  }
+}

@@ -1,0 +1,61 @@
+namespace:
+  name: global
+  description: Special-purpose IP reference catalog; global does not mean globally routable.
+prefixes:
+  - prefix: 192.0.2.0/24
+    description: Documentation (TEST-NET-1).
+    references: [https://www.rfc-editor.org/rfc/rfc5737]
+  - prefix: 198.51.100.0/24
+    description: Documentation (TEST-NET-2).
+    references: [https://www.rfc-editor.org/rfc/rfc5737]
+  - prefix: 203.0.113.0/24
+    description: Documentation (TEST-NET-3).
+    references: [https://www.rfc-editor.org/rfc/rfc5737]
+  - prefix: 2001:db8::/32
+    description: IPv6 documentation.
+    references: [https://www.rfc-editor.org/rfc/rfc3849]
+  - prefix: 3fff::/20
+    description: Additional IPv6 documentation space.
+    references: [https://www.rfc-editor.org/rfc/rfc9637]
+  - prefix: 10.0.0.0/8
+    description: RFC1918 private-use space.
+    references: [https://www.rfc-editor.org/rfc/rfc1918]
+  - prefix: 172.16.0.0/12
+    description: RFC1918 private-use space.
+    references: [https://www.rfc-editor.org/rfc/rfc1918]
+  - prefix: 192.168.0.0/16
+    description: RFC1918 private-use space.
+    references: [https://www.rfc-editor.org/rfc/rfc1918]
+  - prefix: fc00::/7
+    description: IPv6 Unique Local Address aggregate; locally assigned ULAs use fd00::/8.
+    references: [https://www.rfc-editor.org/rfc/rfc4193]
+  - prefix: fd00::/8
+    description: Locally assigned IPv6 ULA; generate a pseudorandom 40-bit Global ID for operational /48s, then use /64 subnets. No operational allocation is made by this catalog.
+    references: [https://www.rfc-editor.org/rfc/rfc4193]
+  - prefix: 100.64.0.0/10
+    description: Shared address space for carrier-grade NAT; distinct from RFC1918.
+    references: [https://www.rfc-editor.org/rfc/rfc6598]
+  - prefix: 169.254.0.0/16
+    description: IPv4 link-local (IPIPA); reference block, not an allocation pool.
+    references: [https://www.rfc-editor.org/rfc/rfc3927]
+  - prefix: fe80::/10
+    description: IPv6 link-local unicast.
+    references: [https://www.rfc-editor.org/rfc/rfc4291]
+  - prefix: 127.0.0.0/8
+    description: IPv4 loopback.
+    references: [https://www.rfc-editor.org/rfc/rfc1122]
+  - prefix: ::1/128
+    description: IPv6 loopback address represented as a reference prefix.
+    references: [https://www.rfc-editor.org/rfc/rfc4291]
+  - prefix: 198.18.0.0/15
+    description: IPv4 network device benchmarking.
+    references: [https://www.rfc-editor.org/rfc/rfc2544]
+  - prefix: 2001:2::/48
+    description: IPv6 network device benchmarking.
+    references: [https://www.rfc-editor.org/rfc/rfc5180]
+  - prefix: 64:ff9b::/96
+    description: Well-known IPv4/IPv6 translation prefix (NAT64).
+    references: [https://www.rfc-editor.org/rfc/rfc6052]
+  - prefix: 64:ff9b:1::/48
+    description: Local-use IPv4/IPv6 translation prefix.
+    references: [https://www.rfc-editor.org/rfc/rfc8215]
