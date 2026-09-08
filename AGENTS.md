@@ -76,6 +76,9 @@ the target Infrahub branch explicitly for provisioning and validation.
 
 ## Implementation conventions
 
+- Include `Co-authored-by: Codex <noreply@openai.com>` as a Git commit trailer
+  on commits containing Codex contributions, as requested by the user. Preserve
+  the user's primary authorship.
 - Use pytest for tests and Typer for project CLI tools. Test CLI behavior with
   Typer’s CliRunner and mock SDK calls so the default test suite stays offline.
 
