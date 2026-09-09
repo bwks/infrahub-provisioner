@@ -14,10 +14,11 @@ Copyright 2024 OpsMill SAS. The upstream Apache-2.0 license is included in
 | `schemas/location.yml` | `base/location.yml` |
 | `schemas/organization.yml` | `base/organization.yml` |
 | `schemas/vrf.yml` | `extensions/vrf/vrf.yml` |
+| `schemas/azure.yml` | `experimental/azure/azure.yml` |
 
-The VRF extension declares `base` as a dependency. Include the complete upstream
+The VRF and experimental Azure extensions declare `base` as a dependency. Include the complete upstream
 base so device/interface, prefix scope, organization, and location references
-resolve. Submit all five files together with `infrahubctl schema load schemas`;
+resolve. Submit all six files together with `infrahubctl schema load schemas`;
 the server resolves the combined schema dependencies. No upstream object files
 or sample data are included.
 
@@ -26,3 +27,7 @@ upstream commit, copy the required files unchanged, refresh the revision and
 SHA-256 values in [manifest.json](manifest.json), and validate on an Infrahub branch.
 The local integrity test checks all schema files against that manifest. The paths
 are flattened locally; file contents, including upstream comments, are unchanged.
+
+The Azure extension is attributed upstream to Rowan Coleman. Its experimental
+status and all original fields and relationships are preserved. No Azure seed data
+or custom Azure schema additions are included.

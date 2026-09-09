@@ -21,6 +21,10 @@
     "schemas/vrf.yml": {
       "upstream": "extensions/vrf/vrf.yml",
       "sha256": "3224b9af367e535a105233c210d12617faca8b28d55b97aad3d48e70ae4f852e"
+    },
+    "schemas/azure.yml": {
+      "upstream": "experimental/azure/azure.yml",
+      "sha256": "641f570c99c0773f3cbcaf6a7c892dea0c3c0034afaef57973b9c2713e4bb925"
     }
   }
 }

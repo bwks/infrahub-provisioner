@@ -1,4 +1,4 @@
-"""Read-only verification of the deployed IPAM schema; creates no objects."""
+"""Read-only verification of deployed IPAM and Azure schemas; creates no objects."""
 
 import sys
 from typing import Annotated
@@ -8,9 +8,50 @@ from infrahub_sdk import InfrahubClientSync
 
 app = typer.Typer(help=__doc__, add_completion=False, pretty_exceptions_enable=False)
 
+AZURE_NODES = (
+    "AzureLocation",
+    "AzureTenant",
+    "AzureSubscription",
+    "AzureResourceGroup",
+    "AzureVirtualNetwork",
+    "AzureVirtualNetworkSubnet",
+)
+
+
+def verify_azure(schemas) -> None:
+    for kind in (*AZURE_NODES, "AzureResource"):
+        if kind not in schemas:
+            raise ValueError(f"{kind} is missing")
+    if "AzureResource" not in schemas["AzureVirtualNetwork"].inherit_from:
+        raise ValueError("AzureVirtualNetwork must inherit from AzureResource")
+    relationships = (
+        ("AzureTenant", "subscriptions", "AzureSubscription", "many"),
+        ("AzureSubscription", "tenant", "AzureTenant", "one"),
+        ("AzureSubscription", "resourcegroups", "AzureResourceGroup", "many"),
+        ("AzureResourceGroup", "subscription", "AzureSubscription", "one"),
+        ("AzureResourceGroup", "location", "AzureLocation", "one"),
+        ("AzureResource", "location", "AzureLocation", "one"),
+        ("AzureResource", "resourcegroup", "AzureResourceGroup", "one"),
+        ("AzureVirtualNetwork", "location", "AzureLocation", "one"),
+        ("AzureVirtualNetwork", "resourcegroup", "AzureResourceGroup", "one"),
+        ("AzureVirtualNetwork", "address_space", "BuiltinIPPrefix", "many"),
+        ("AzureVirtualNetwork", "subnets", "AzureVirtualNetworkSubnet", "many"),
+        ("AzureVirtualNetworkSubnet", "virtualnetwork", "AzureVirtualNetwork", "one"),
+        ("AzureVirtualNetworkSubnet", "address_prefixes", "BuiltinIPPrefix", "many"),
+    )
+    for kind, name, peer, cardinality in relationships:
+        relationship = schemas[kind].get_relationship_or_none(name)
+        if (
+            relationship is None
+            or relationship.peer != peer
+            or relationship.cardinality != cardinality
+        ):
+            raise ValueError(f"{kind}.{name} must refer to {cardinality} {peer}")
+
 
 def verify(client: InfrahubClientSync, branch: str) -> None:
     schemas = client.schema.all(branch=branch, refresh=True)
+    verify_azure(schemas)
     expected = {
         "IpamNamespace": "BuiltinIPNamespace",
         "IpamPrefix": "BuiltinIPPrefix",
@@ -46,10 +87,12 @@ def verify(client: InfrahubClientSync, branch: str) -> None:
     # Verify API exposure as well as the REST schema, without creating sample data.
     counts = client.execute_graphql(
         query="{ IpamNamespace { count } IpamPrefix { count } "
-        "IpamIPAddress { count } IpamVRF { count } IpamRouteTarget { count } }",
+        "IpamIPAddress { count } IpamVRF { count } IpamRouteTarget { count } "
+        + " ".join(f"{kind} {{ count }}" for kind in AZURE_NODES)
+        + " }",
         branch_name=branch,
     )
-    print(f"IPAM schema verified on branch {branch}.")
+    print(f"IPAM and Azure schemas verified on branch {branch}.")
     for kind, result in counts.items():
         print(f"  {kind}: {result['count']} objects")
 

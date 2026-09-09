@@ -132,9 +132,10 @@ the target Infrahub branch explicitly for provisioning and validation.
 
 ## Later milestones and suggested models
 
-After basic IPAM works, evaluate the Schema Library's experimental Azure extension
-for tenants, subscriptions, resource groups, regions, virtual networks, and subnets.
-Validate it unchanged before loading it or connecting Azure objects to IPAM.
+The experimental Azure extension is now included unchanged for tenants,
+subscriptions, resource groups, regions, virtual networks, and subnets.
+The shared verifier requires IPAM and Azure schemas, checks their relationships,
+and queries Azure object counts. This schema step adds no Azure resource data.
 Prepare validated desired-state data for external Terraform/OpenTofu consumers;
 the choice of runner and downstream interface belongs to that later milestone.
 

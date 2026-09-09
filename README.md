@@ -6,7 +6,7 @@ extend toward Azure and external Terraform/OpenTofu consumers.
 
 ## Current status
 
-The repository provides unmodified upstream base and VRF schemas, a locked Python
+The repository provides unmodified upstream base, VRF, and Azure schemas, a locked Python
 environment,
 an SDK-based schema check, and read-only verification of the deployed models.
 
@@ -32,7 +32,8 @@ and validate schema changes on a dedicated Infrahub branch before integration.
 
 The schemas-only milestone is complete. The seed workflow adds the reference
 catalog described below; it creates no operational allocations.
-Automatic allocation and relationships to Azure resources are deferred.
+Automatic allocation remains deferred. The later Azure schema step adds model
+relationships to IPAM prefixes, without creating resource objects.
 
 The unchanged upstream dependency set also supplies DCIM, organization, location
 generics, and route-target schemas. These are loaded as dependencies, without
@@ -46,7 +47,7 @@ standalone prefix/address menu entries.
 - [x] Document scope and the first milestone.
 - [x] Inspect the live schema and select compatible SDK/library versions.
 - [x] Establish reproducible local tooling and provisioning commands.
-- [x] Vendor unmodified upstream base and VRF schemas with required dependencies.
+- [x] Vendor unmodified upstream base, VRF, and Azure schemas with required dependencies.
 - [x] Validate schema loading and repeatability on a dedicated Infrahub branch.
 - [x] Integrate the validated schemas and document the working workflow.
 
@@ -97,7 +98,7 @@ uv run python scripts/verify_schema.py --branch upstream-ipam
 
 Inspect the check output before loading. The schema includes prefixes, addresses,
 VRFs, route targets, and required base models; it reuses the built-in
-`IpamNamespace`. All five YAML files are byte-for-byte upstream copies.
+`IpamNamespace`. All six YAML files are byte-for-byte upstream copies.
 Use a new branch name for subsequent changes. Branch creation itself is not
 idempotent; skip it if intentionally resuming an existing open validation branch.
 
@@ -227,6 +228,57 @@ The source catalog uses the [IANA IPv4 registry](https://www.iana.org/assignment
 [IANA IPv6 registry](https://www.iana.org/assignments/iana-ipv6-special-registry),
 and [RFC4193](https://www.rfc-editor.org/rfc/rfc4193).
 
+## Azure schema
+
+Deployed to Infrahub `main` after validation and merge of `azure-schema`.
+All six Azure node types are empty; the existing IPAM reference data is preserved.
+
+The unchanged experimental Azure extension is vendored at the same upstream
+revision as the base and VRF schemas. It adds these models:
+
+| Kind | Purpose |
+| --- | --- |
+| `AzureTenant` | Tenant name/ID and subscriptions |
+| `AzureSubscription` | Subscription name/ID, tenant, and resource groups |
+| `AzureLocation` | Azure region/location name |
+| `AzureResourceGroup` | Resource group, subscription, and location |
+| `AzureVirtualNetwork` | VNet, location/resource group, address space, and subnets |
+| `AzureVirtualNetworkSubnet` | Subnet, parent VNet, and IPAM prefixes |
+| `AzureResource` | Shared resource generic inherited by VNets |
+
+VNet address space and subnet prefixes reference `BuiltinIPPrefix`, which includes
+our `IpamPrefix` records. This step creates no Azure objects or operational IP
+allocations and requires no Azure credentials. The extension is experimental and
+is not a complete Azure deployment model: VMs, NICs, NSGs, route tables, and other
+resource types are not included.
+
+Use the existing environment and commands to validate the complete schema set:
+
+```sh
+uv run infrahubctl branch create azure-schema
+uv run python scripts/check_schema.py --branch azure-schema
+uv run infrahubctl schema load schemas --branch azure-schema --wait 30
+uv run python scripts/verify_schema.py --branch azure-schema
+uv run infrahubctl schema load schemas --branch azure-schema --wait 30
+uv run python scripts/check_schema.py --branch azure-schema
+uv run python scripts/seed_ipam.py --branch azure-schema
+```
+
+The second load should make no changes, the check should show no diff, and the
+seed preview should report all 20 catalog objects matching. The verifier now
+requires both IPAM and Azure models and queries all six Azure node types.
+After validation, merge and inspect the destination:
+
+```sh
+INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge azure-schema
+uv run python scripts/verify_schema.py --branch main
+uv run python scripts/check_schema.py --branch main
+uv run python scripts/seed_ipam.py --branch main
+```
+
+Choose a new branch name for later changes; no schema/seed command implicitly
+creates or merges branches. Schema files remain byte-for-byte upstream copies.
+
 ## Source of truth and project boundaries
 
 Git holds schema definitions and bootstrap configuration. Infrahub holds operational
@@ -243,9 +295,9 @@ separate project.
 The reference catalog supplies standard special-purpose ranges. Choose real
 namespace/VRF names and address allocations before adding operational data.
 
-Later, evaluate the Schema Library's experimental Azure extension for tenants,
-subscriptions, resource groups, regions, virtual networks, and subnets. Add Azure
-relationships and downstream data interfaces when that work begins.
+Next, choose Azure reference/resource data and downstream data interfaces. The
+upstream Azure extension supplies the initial schema, without cloud synchronization
+or deployment execution.
 
 Optional future models include organization/ownership, locations, environment and
 tagging conventions, and service/application ownership. Security policies,
