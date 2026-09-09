@@ -27,7 +27,11 @@ def load_catalog(path: Path):
     catalog = yaml.safe_load(path.read_text())
     fields(catalog, ["namespace", "prefixes"], "Catalog")
     namespace = catalog["namespace"]
-    fields(namespace, ["name", "description"], "Namespace")
+    if not isinstance(namespace, dict) or set(namespace) not in (
+        {"name"},
+        {"name", "description"},
+    ):
+        raise ValueError("Namespace must contain name and optionally description")
     for key, value in namespace.items():
         text_field(value, f"Namespace {key}")
     if not isinstance(catalog["prefixes"], list) or not catalog["prefixes"]:
@@ -70,7 +74,10 @@ def load_catalog(path: Path):
             int(ipaddress.ip_network(p["prefix"]).network_address),
         )
     )
-    return {**namespace, "default": False}, prefixes
+    # Name-only selects an existing namespace without owning its metadata.
+    if "description" in namespace:
+        namespace = {**namespace, "default": namespace["name"] == "default"}
+    return namespace, prefixes
 
 
 def differences(node, desired):
@@ -94,6 +101,13 @@ def seed(client, branch, namespace, prefixes, apply=False):
         branch=branch,
         raise_when_missing=False,
     )
+    if existing_namespace is None and (
+        "description" not in namespace or namespace["name"] == "default"
+    ):
+        typer.echo(
+            f"Namespace {namespace['name']!r} must already exist; created=0.", err=True
+        )
+        return 1
     conflicts = []
     pending = []
     skipped = 0

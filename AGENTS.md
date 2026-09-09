@@ -10,7 +10,7 @@ and VRFs. Keep this milestone small. Automatic address allocation and relationsh
 to Azure resources are deferred.
 
 The schemas-only milestone is complete. The seed workflow manages the agreed
-19 special-purpose prefixes in the `global` namespace from `data/ipam.yaml`.
+19 special-purpose prefixes in the existing `default` namespace from `data/ipam.yaml`.
 Do not invent operational allocations or modify upstream schemas.
 
 This repository owns Infrahub schemas, bootstrap/reference data, provisioning
@@ -190,12 +190,25 @@ access limitations. Distinguish local checks from checks run against Infrahub.
 
 ## IPAM seed workflow
 
+The catalog was moved from global to default on branch `ipam-default` and merged
+into Infrahub `main`. All 19 prefix IDs were preserved; global was deleted only
+after it was empty. The original default namespace and its designation remain.
+
 - Use `uv run python scripts/seed_ipam.py --branch <branch>` for read-only preview;
   add `--apply` to create missing catalog objects. The optional `--data` selects YAML.
 - Preflight all seed-field conflicts before writes. Never overwrite existing edits
   or delete objects. Partial failures are not rolled back; inspect and rerun.
 - Identify prefixes by namespace plus canonical CIDR. Preserve the existing
-  `default` namespace and its default flag; `global` is not the default namespace.
+  `default` namespace and its default flag. The catalog now selects `default` by
+  name only; its description/default metadata are unmanaged by seed reruns.
+- Name-only namespace selectors must already exist. A catalog with a namespace
+  description may create a missing non-default namespace and checks its metadata
+  on reruns. Never recreate or change the built-in default designation.
+- `scripts/move_ipam_to_default.py --branch <branch>` previews the one-time catalog
+  move from global to default; `--apply` moves prefixes while preserving IDs, checks
+  native hierarchy, and deletes global only after generic prefix/address counts
+  are zero. The normal seed still never moves or deletes data. Run migration on
+  an isolated branch with one writer; inspect and rerun after partial failures.
 - Catalog status `reserved` is not IANA reserved-by-protocol metadata. No allocation
   pools, VRFs, individual address objects, or schema modifications are seeded.
 
@@ -224,6 +237,19 @@ access limitations. Distinguish local checks from checks run against Infrahub.
   CLI. Unknown GUIDs are reported as pending and ignored in duplicate checks.
 - Validate hierarchy edge cases offline; live seeding is limited to the explicitly
   requested fake-corp catalog. Synchronization, policy/RBAC, and execution remain deferred.
+
+## Azure lifecycle status
+
+- `schemas/local/azure_status.yml` supplies status dropdowns on all seven
+  Azure node types, plus the resource and management-group hierarchy generics.
+  Options are Planned, Active, Reserved, Deprecated, and Unmanaged. Regions
+  (`AzureLocation`) default to Unmanaged because they are Azure-managed reference
+  configuration; other Azure types default to Planned.
+- These are schema attribute choices, not a global status registry. Upstream IPAM
+  status definitions remain unchanged. Preserve the hierarchy generic's metadata
+  in its local status extension, including `hierarchical: true`.
+- Status is operational intent: seed reruns must preserve user edits. No Azure
+  execution, discovery, or automatic status transitions are implemented.
 
 ## Planned Azure hierarchy seed
 

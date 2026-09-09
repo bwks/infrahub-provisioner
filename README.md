@@ -169,14 +169,20 @@ uv run ruff format --check scripts tests
 
 ## IPAM reference seed data
 
-Deployed to `main` after validation and merge of `ipam-seed`. All 19 prefixes and
-the `global` namespace match the catalog; reruns create nothing. The native ULA
-parent/child hierarchy and original default namespace designation were verified.
-No individual addresses, VRFs, or allocation pools were created.
+Migrated on Infrahub `main` after validation and merge of `ipam-default`; the empty
+`global` namespace has been deleted. All 19 original prefix IDs and catalog fields
+were preserved, including the native `fc00::/7` → `fd00::/8` hierarchy.
 
-`data/ipam.yaml` defines 19 reference prefixes in a namespace named `global`.
-The existing `default` namespace keeps its default designation. The name `global`
-does not imply Internet routability. Descriptions include purpose and RFC links.
+`data/ipam.yaml` defines 19 reference prefixes in the existing `default`
+namespace. This makes the catalog visible in [IPAM → IP Prefixes](http://ihub01:8000/ipam?branch=main)
+without selecting a different namespace. Prefix descriptions include purpose and
+RFC links. No individual addresses, VRFs, or allocation pools are seeded.
+
+The catalog uses a name-only namespace selector. The seed requires that namespace
+to exist and preserves its description and default designation. It does not
+create or modify namespace metadata in this mode. Custom catalogs may include a
+namespace description to create a missing non-default namespace; reruns check its
+metadata for conflicts. The built-in `default` namespace must always already exist.
 
 | Purpose | Prefixes |
 | --- | --- |
@@ -203,22 +209,10 @@ After setting the lab environment variables above, preview without writes:
 uv run python scripts/seed_ipam.py --branch main
 ```
 
-Create an Infrahub validation branch, then apply and rerun:
-
-```sh
-uv run infrahubctl branch create ipam-seed
-uv run python scripts/seed_ipam.py --branch ipam-seed --apply
-uv run python scripts/seed_ipam.py --branch ipam-seed --apply
-```
-
-Use a new branch name for later changes, or resume an existing open branch.
-The first run creates one namespace and 19 prefixes; an unchanged rerun skips
-all 20 objects. Merge after inspecting and validating the results:
-
-```sh
-INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge ipam-seed
-uv run python scripts/seed_ipam.py --branch main
-```
+An apply creates only missing catalog prefixes. On a bare compatible instance,
+the built-in default namespace is reused and 19 prefixes are created. Unchanged
+reruns match all 20 objects (namespace plus prefixes). Use a dedicated Infrahub
+branch when applying catalog changes; the seed never creates or merges branches.
 
 `--data PATH` selects another catalog with the same format. The CLI validates all
 input and checks all existing seed-field conflicts before writing. Differences
@@ -230,6 +224,63 @@ are retained and matched on the next run. Creation does not use upsert.
 The source catalog uses the [IANA IPv4 registry](https://www.iana.org/assignments/iana-ipv4-special-registry),
 [IANA IPv6 registry](https://www.iana.org/assignments/iana-ipv6-special-registry),
 and [RFC4193](https://www.rfc-editor.org/rfc/rfc4193).
+
+### Migration from global to default
+
+The original `ipam-seed` integration placed the catalog in `global`. The dedicated
+`scripts/move_ipam_to_default.py` command migrates that catalog into the existing
+`default` namespace and deletes `global` only after verifying that it is empty.
+The normal seed command does not perform moves or deletions.
+
+Migration preflight requires exactly the catalog across the two namespaces, no
+duplicate or extra prefixes, no individual addresses or unexpected prefix types,
+and no catalog-field conflicts. It changes only each prefix's namespace, preserves
+object IDs, and checks that native containment has reconciled at the destination.
+Both generic prefix/address inventories are rechecked before source deletion,
+because namespace deletion cascades to contained IP resources. Run one writer on
+the migration branch; do not add data concurrently.
+
+The command defaults to preview. After interruption, inspect the branch and rerun;
+previously moved prefixes are recognized and no rollback is attempted. It also
+supports an unchanged rerun after `global` has been deleted. A failed destination
+or emptiness check prevents source deletion.
+
+
+Verified migration-branch commands:
+
+```sh
+uv run infrahubctl branch create ipam-default
+uv run python scripts/move_ipam_to_default.py --branch ipam-default
+uv run python scripts/move_ipam_to_default.py --branch ipam-default --apply
+uv run python scripts/move_ipam_to_default.py --branch ipam-default --apply
+uv run python scripts/seed_ipam.py --branch ipam-default --apply
+uv run python scripts/seed_ipam.py --branch ipam-default
+uv run python scripts/verify_schema.py --branch ipam-default
+uv run python scripts/check_azure_hierarchy.py --branch ipam-default
+uv run python scripts/seed_azure_hierarchy.py --branch ipam-default
+```
+
+The first migration moved all 19 prefixes with unchanged IDs and native hierarchy,
+then deleted the empty source. The second moved zero. Both seed checks matched
+their catalogs: 20 IPAM objects and 14 Azure objects. Only the original default
+IP namespace remains, with its original default designation.
+
+
+The merge and destination checks were verified with:
+
+```sh
+INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge ipam-default
+uv run python scripts/seed_ipam.py --branch main
+uv run python scripts/verify_schema.py --branch main
+uv run python scripts/check_azure_hierarchy.py --branch main
+uv run python scripts/seed_azure_hierarchy.py --branch main
+```
+
+The main-branch prefix IDs were compared with a pre-migration snapshot: all 19
+were preserved, and every prefix now belongs to the original default namespace.
+Both catalog previews report no missing or conflicting objects. Existing browser
+links selecting the deleted global namespace should be replaced with
+[the default IPAM view](http://ihub01:8000/ipam?branch=main).
 
 ## Azure schema
 
@@ -300,11 +351,19 @@ Use Infrahub object IDs or tenant plus management-group ID to identify records.
 There is no HFID because the upstream tenant ID has no uniqueness constraint.
 The group appears under Azure without inheriting resource-group-scoped `AzureResource`.
 
-`AzureManagementGroupHierarchy` supplies native parent/children hierarchy. A group
+`AzureManagementGroupHierarchy` supplies native parent/children hierarchy and uses
+the UI label **Management Group Hierarchy**. Its model identifier and
+`/objects/AzureManagementGroupHierarchy` route remain unchanged. A group
 without a parent is a root; no root flag is stored. Local extensions add
 `AzureTenant.management_groups`, `AzureSubscription.management_group`, and the
 reverse group `subscriptions` relationship. The original subscription tenant
 relationship remains required. Group membership is optional for incremental editing.
+
+The hierarchy label was validated on `azure-hierarchy-label`. Its merge left the
+old generic label on `main`; the remaining label-only diff was applied with
+`uv run infrahubctl schema load schemas --branch main --wait 30`. A subsequent
+`uv run python scripts/check_schema.py --branch main` reported no diff or warnings,
+and the live label and unchanged object counts were verified.
 
 Run the read-only complete-hierarchy gate with an explicit branch:
 
@@ -466,6 +525,47 @@ reported `missing=0, skipped=14, conflicting=0`; the IPAM preview reported
 `missing=0, skipped=20, conflicting=0`. Use a fresh validation branch for later
 schema/catalog changes. The seed command defaults to preview; `--apply` creates
 missing objects and `--data PATH` selects another catalog with the same format.
+
+## Azure lifecycle status
+
+`schemas/local/azure_status.yml` adds a Status dropdown to tenants, management
+groups, subscriptions, resource groups, regions, virtual networks, and virtual
+network subnets. It is also available on the management-group hierarchy view.
+
+| Option | Meaning |
+| --- | --- |
+| Planned | Intended configuration awaiting provisioning; default for most Azure objects |
+| Active | Provisioned and in use |
+| Reserved | Held for future use |
+| Deprecated | Being retired or no longer recommended |
+| Unmanaged | Azure-managed reference configuration; default for regions (`AzureLocation`) |
+
+The choices are shared through local YAML definitions, not a global status registry.
+Upstream IPAM dropdowns remain Active, Reserved, and Deprecated. Infrahub normalizes
+attributes with defaults to optional inputs; omitted status receives the default.
+Status remains editable, including on regions, and seed reruns preserve edits.
+No discovery, Azure provisioning, or automatic lifecycle transitions are performed.
+
+Validated on the `azure-status` Infrahub branch using:
+
+```sh
+uv run python scripts/check_schema.py --branch azure-status
+uv run infrahubctl schema load schemas --branch azure-status --wait 30
+uv run python scripts/verify_schema.py --branch azure-status
+uv run infrahubctl schema load schemas --branch azure-status --wait 30
+uv run python scripts/check_azure_hierarchy.py --branch azure-status
+uv run python scripts/seed_azure_hierarchy.py --branch azure-status
+uv run python scripts/seed_ipam.py --branch azure-status
+```
+
+The existing tenant and 13 management groups received Planned. No regions or other
+Azure objects were created. The unchanged reload required no changes, the hierarchy
+passed, and both catalogs matched (14 Azure objects and 20 IPAM objects).
+
+Merged with `INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge azure-status`.
+The same schema, hierarchy, and catalog checks passed against `--branch main`;
+the schema diff was empty. Status values and original Azure object IDs were also
+verified on `main`. Local validation: 176 pytest tests and Ruff checks passed.
 
 ## Source of truth and project boundaries
 

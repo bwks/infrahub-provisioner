@@ -3,6 +3,7 @@ version: "1.0"
 generics:
   - name: ManagementGroupHierarchy
     namespace: Azure
+    label: Management Group Hierarchy
     hierarchical: true
     include_in_menu: false
 nodes:

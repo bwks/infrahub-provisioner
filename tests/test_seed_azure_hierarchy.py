@@ -310,3 +310,17 @@ def test_cli_read_failure_redacted(monkeypatch, client):
     assert result.exit_code == 1
     assert "RuntimeError" in result.stderr and "secret-token" not in result.output
     client.create.assert_not_called()
+
+
+def test_seed_preserves_operational_status(client, catalog):
+    assert module.seed(client, "validation", catalog, True) == 0
+    nodes = client.inventory["AzureTenant"] + client.inventory["AzureManagementGroup"]
+    for index, node in enumerate(nodes):
+        node.status = NS(value="active" if index % 2 else "deprecated")
+    before = {n.id: n.status.value for n in nodes}
+    client.create.reset_mock()
+    assert module.seed(client, "validation", catalog, True) == 0
+    client.create.assert_not_called()
+    assert {n.id: n.status.value for n in nodes} == before
+    for node in nodes:
+        node.save.assert_called_once()

@@ -1,6 +1,6 @@
 namespace:
-  name: global
-  description: Special-purpose IP reference catalog; global does not mean globally routable.
+  # Select the existing namespace; its description and default flag are unmanaged.
+  name: default
 prefixes:
   - prefix: 192.0.2.0/24
     description: Documentation (TEST-NET-1).

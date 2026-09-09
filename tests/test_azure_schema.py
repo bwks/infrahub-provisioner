@@ -16,6 +16,7 @@ def schemas():
     for path in (
         Path("schemas/azure.yml"),
         Path("schemas/local/azure_management_groups.yml"),
+        Path("schemas/local/azure_status.yml"),
     ):
         data = yaml.safe_load(path.read_text())
         for section in ("generics", "nodes"):
@@ -47,6 +48,7 @@ def schemas():
         node.relationships.extend(node.hierarchical_relationship_schemas)
         for parent in getattr(node, "inherit_from", []):
             node.relationships.extend(nodes[parent].relationships)
+            node.attributes.extend(nodes[parent].attributes)
 
     return nodes
 
@@ -216,3 +218,45 @@ def test_azure_identifier_optionality(schemas, kind, attribute):
     schemas[kind].get_attribute(attribute).optional = False
     with pytest.raises(ValueError, match=attribute):
         verify_azure(schemas)
+
+
+@pytest.mark.parametrize(
+    "kind", [*AZURE_NODES, "AzureResource", "AzureManagementGroupHierarchy"]
+)
+def test_azure_status_missing(schemas, kind):
+    schemas[kind].attributes = [
+        a for a in schemas[kind].attributes if a.name != "status"
+    ]
+    with pytest.raises(ValueError, match=f"{kind}.status"):
+        verify_azure(schemas)
+
+
+@pytest.mark.parametrize(
+    "field,value", [("default_value", "active"), ("optional", False), ("choices", [])]
+)
+def test_azure_status_contract(schemas, field, value):
+    setattr(schemas["AzureSubscription"].get_attribute("status"), field, value)
+    with pytest.raises(ValueError, match="AzureSubscription.status"):
+        verify_azure(schemas)
+
+
+def test_region_status_default_is_unmanaged(schemas):
+    assert schemas["AzureLocation"].get_attribute("status").default_value == "unmanaged"
+    schemas["AzureLocation"].get_attribute("status").default_value = "planned"
+    with pytest.raises(ValueError, match="AzureLocation.status"):
+        verify_azure(schemas)
+
+
+def test_status_labels_and_colors(schemas):
+    expected = {
+        "planned": ("Planned", "#a855f7"),
+        "active": ("Active", "#00d25b"),
+        "reserved": ("Reserved", "#4d90fe"),
+        "deprecated": ("Deprecated", "#e04040"),
+        "unmanaged": ("Unmanaged", "#9ca3af"),
+    }
+    for kind in AZURE_NODES:
+        assert {
+            c["name"]: (c["label"], c["color"])
+            for c in schemas[kind].get_attribute("status").choices
+        } == expected

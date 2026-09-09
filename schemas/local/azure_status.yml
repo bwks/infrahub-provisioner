@@ -1,0 +1,64 @@
+# Repository-owned lifecycle status; upstream IPAM dropdowns remain unchanged.
+version: "1.0"
+generics:
+  - name: Resource
+    namespace: Azure
+    attributes:
+      - &azure_status
+        name: status
+        label: Status
+        kind: Dropdown
+        optional: true
+        default_value: planned
+        order_weight: 1200
+        choices:
+          - name: planned
+            label: Planned
+            color: "#a855f7"
+            description: Intended configuration that has not yet been provisioned.
+          - name: active
+            label: Active
+            color: "#00d25b"
+            description: Provisioned and in use.
+          - name: reserved
+            label: Reserved
+            color: "#4d90fe"
+            description: Held for future use.
+          - name: deprecated
+            label: Deprecated
+            color: "#e04040"
+            description: Being retired or no longer recommended for use.
+          - name: unmanaged
+            label: Unmanaged
+            color: "#9ca3af"
+            description: Azure-managed reference configuration, outside our provisioning lifecycle.
+  - name: ManagementGroupHierarchy
+    namespace: Azure
+    # Repeated generic definitions must preserve hierarchy metadata during merging.
+    label: Management Group Hierarchy
+    hierarchical: true
+    include_in_menu: false
+    attributes:
+      - *azure_status
+nodes:
+  - name: Location
+    namespace: Azure
+    attributes:
+      - <<: *azure_status
+        default_value: unmanaged
+  - name: Tenant
+    namespace: Azure
+    attributes:
+      - *azure_status
+  - name: Subscription
+    namespace: Azure
+    attributes:
+      - *azure_status
+  - name: ResourceGroup
+    namespace: Azure
+    attributes:
+      - *azure_status
+  - name: VirtualNetworkSubnet
+    namespace: Azure
+    attributes:
+      - *azure_status

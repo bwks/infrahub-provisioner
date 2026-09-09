@@ -19,10 +19,26 @@ AZURE_NODES = (
 )
 
 
+AZURE_STATUSES = {"planned", "active", "reserved", "deprecated", "unmanaged"}
+
+
 def verify_azure(schemas) -> None:
     for kind in (*AZURE_NODES, "AzureResource", "AzureManagementGroupHierarchy"):
         if kind not in schemas:
             raise ValueError(f"{kind} is missing")
+    for kind in (*AZURE_NODES, "AzureResource", "AzureManagementGroupHierarchy"):
+        status = schemas[kind].get_attribute_or_none("status")
+        default = "unmanaged" if kind == "AzureLocation" else "planned"
+        if (
+            status is None
+            or status.kind != "Dropdown"
+            or not status.optional
+            or status.default_value != default
+            or {choice["name"] for choice in status.choices or []} != AZURE_STATUSES
+        ):
+            raise ValueError(
+                f"{kind}.status must be an Azure lifecycle dropdown defaulting to {default}"
+            )
     if "AzureResource" not in schemas["AzureVirtualNetwork"].inherit_from:
         raise ValueError("AzureVirtualNetwork must inherit from AzureResource")
     group = schemas["AzureManagementGroup"]
