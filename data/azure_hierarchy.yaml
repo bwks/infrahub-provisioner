@@ -1,0 +1,43 @@
+# Planned intent based on Microsoft's Azure landing-zone hierarchy (2026-04-02).
+# Azure tenant and root GUIDs are operational data, populated later in Infrahub.
+tenant:
+  name: fake-corp
+root:
+  display_name: Tenant root group
+management_groups:
+  - management_group_id: fake-corp
+    display_name: fake-corp
+    parent: null
+  - management_group_id: platform
+    display_name: Platform
+    parent: fake-corp
+  - management_group_id: security
+    display_name: Security
+    parent: platform
+  - management_group_id: management
+    display_name: Management
+    parent: platform
+  - management_group_id: connectivity
+    display_name: Connectivity
+    parent: platform
+  - management_group_id: identity
+    display_name: Identity
+    parent: platform
+  - management_group_id: landing-zones
+    display_name: Landing zones
+    parent: fake-corp
+  - management_group_id: online
+    display_name: Online
+    parent: landing-zones
+  - management_group_id: corp
+    display_name: Corp
+    parent: landing-zones
+  - management_group_id: local
+    display_name: Local
+    parent: landing-zones
+  - management_group_id: sandbox
+    display_name: Sandbox
+    parent: fake-corp
+  - management_group_id: decommissioned
+    display_name: Decommissioned
+    parent: fake-corp

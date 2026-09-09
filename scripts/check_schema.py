@@ -13,7 +13,7 @@ app = typer.Typer(help=__doc__, add_completion=False, pretty_exceptions_enable=F
 
 
 async def check(branch: str, directory: Path) -> int:
-    files = sorted([*directory.glob("*.yml"), *directory.glob("*.yaml")])
+    files = sorted([*directory.rglob("*.yml"), *directory.rglob("*.yaml")])
     if not files:
         raise ValueError(f"No schema YAML files found in {directory}")
     client = InfrahubClient()

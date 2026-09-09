@@ -36,3 +36,20 @@ def test_non_mapping_yaml_is_not_submitted(tmp_path, client):
     with pytest.raises(ValueError, match="expected a YAML mapping"):
         asyncio.run(check_schema.check("validation", tmp_path))
     client.schema.check.assert_not_awaited()
+
+
+def test_recursive_schema_discovery(tmp_path, client):
+    (tmp_path / "local").mkdir()
+    (tmp_path / "upstream.yml").write_text("version: '1.0'\nnodes: []\n")
+    (tmp_path / "local/extension.yaml").write_text("version: '1.0'\ngenerics: []\n")
+    (tmp_path / "local/README.md").write_text("Not a schema")
+    client.schema.check.return_value = True, {"diff": {}}
+    assert asyncio.run(check_schema.check("validation", tmp_path)) == 0
+    assert client.schema.validate.call_count == 2
+    assert client.schema.check.call_args.kwargs == {
+        "schemas": [
+            {"version": "1.0", "generics": []},
+            {"version": "1.0", "nodes": []},
+        ],
+        "branch": "validation",
+    }

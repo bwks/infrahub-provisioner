@@ -7,8 +7,11 @@ extend toward Azure and external Terraform/OpenTofu consumers.
 ## Current status
 
 The repository provides unmodified upstream base, VRF, and Azure schemas, a locked Python
-environment,
-an SDK-based schema check, and read-only verification of the deployed models.
+environment, a local Azure management-group extension, an SDK-based schema check,
+read-only verification of the deployed models and Azure hierarchy, and a
+create-only seed workflow for planned Azure management groups. Infrahub `main`
+contains the `fake-corp` tenant and 13 management groups with tenant/root GUIDs
+pending; subscriptions and other Azure resource inventories are empty.
 
 The upstream base and VRF schemas are deployed on the lab’s `main` branch after
 validation and merge of `upstream-ipam`. No sample or operational objects were loaded during schema setup.
@@ -231,7 +234,8 @@ and [RFC4193](https://www.rfc-editor.org/rfc/rfc4193).
 ## Azure schema
 
 Deployed to Infrahub `main` after validation and merge of `azure-schema`.
-All six Azure node types are empty; the existing IPAM reference data is preserved.
+The schema-only integration created no Azure data. The planned `fake-corp` seed
+workflow is described below; the existing IPAM reference data is preserved.
 
 The unchanged experimental Azure extension is vendored at the same upstream
 revision as the base and VRF schemas. It adds these models:
@@ -266,7 +270,7 @@ uv run python scripts/seed_ipam.py --branch azure-schema
 
 The second load should make no changes, the check should show no diff, and the
 seed preview should report all 20 catalog objects matching. The verifier now
-requires both IPAM and Azure models and queries all six Azure node types.
+requires both IPAM and Azure models and queries all seven Azure node types.
 After validation, merge and inspect the destination:
 
 ```sh
@@ -277,7 +281,191 @@ uv run python scripts/seed_ipam.py --branch main
 ```
 
 Choose a new branch name for later changes; no schema/seed command implicitly
-creates or merges branches. Schema files remain byte-for-byte upstream copies.
+creates or merges branches. Vendored schema files remain byte-for-byte upstream copies.
+
+## Azure management groups
+
+Deployed to Infrahub `main` on 2026-09-09 after validation and merge of
+`azure-management-groups`. The initial schema-only integration had empty Azure inventories.
+
+The repository-owned extension lives in
+[schemas/local/azure_management_groups.yml](schemas/local/azure_management_groups.yml).
+Both schema checking and loading discover YAML recursively. Files listed in the
+upstream manifest remain unchanged; local additions are maintained separately.
+
+`AzureManagementGroup` has an optional `management_group_id`, required `display_name`,
+optional `description`, and required `tenant`. Populated group IDs are unique within
+their tenant; the CLI requires an ID for every non-root group.
+Use Infrahub object IDs or tenant plus management-group ID to identify records.
+There is no HFID because the upstream tenant ID has no uniqueness constraint.
+The group appears under Azure without inheriting resource-group-scoped `AzureResource`.
+
+`AzureManagementGroupHierarchy` supplies native parent/children hierarchy. A group
+without a parent is a root; no root flag is stored. Local extensions add
+`AzureTenant.management_groups`, `AzureSubscription.management_group`, and the
+reverse group `subscriptions` relationship. The original subscription tenant
+relationship remains required. Group membership is optional for incremental editing.
+
+Run the read-only complete-hierarchy gate with an explicit branch:
+
+```sh
+uv run python scripts/check_azure_hierarchy.py --branch main
+```
+
+It reads all tenants, groups, and subscriptions using SDK pagination and reports
+all findings with identifiers. Each modeled tenant must have exactly one root
+whose group ID matches its tenant ID when both are populated. Groups must reach that root without cycles,
+self-parenting, missing parents, or crossing tenants. At most six group levels may
+sit beneath the root; subscriptions do not count toward depth. Every subscription
+must belong to a group in its own tenant. Duplicate tenant IDs and group IDs within
+a tenant are rejected case-insensitively, and root ID comparison is case-insensitive.
+
+Local extensions make tenant and subscription Azure GUIDs optional, and display
+these objects by name. The tenant root may also have an unset group ID. Missing
+GUIDs are reported as pending information and do not fail a valid planned tree;
+missing non-root group IDs remain errors. Populated tenant, subscription, and root
+IDs must be GUIDs in the usual hyphenated form. Absent IDs do not count as
+duplicates. Infrahub object IDs remain separate from Azure identifiers.
+
+Group identifiers must follow [Microsoft's naming rules](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules#microsoftmanagement):
+1–90 characters from ASCII letters, digits, hyphens, underscores, periods, and
+parentheses; start with a letter or digit and do not end with a period.
+See also [Microsoft's hierarchy limits](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits)
+and [root group behavior](https://learn.microsoft.com/en-us/azure/governance/management-groups/overview).
+
+Exit status is `0` for valid data (explicitly including an empty Azure inventory),
+and `1` for invalid data or read failures. These complete-hierarchy checks are CLI
+gates, not automatic enforcement on UI/API writes. Run them before consuming or
+integrating operational Azure intent. Schema constraints alone do not guarantee a
+complete valid Azure tree or case-insensitive identifier uniqueness.
+
+The following integration workflow was verified on `azure-management-groups`:
+
+```sh
+uv run infrahubctl branch create azure-management-groups
+uv run python scripts/check_schema.py --branch azure-management-groups
+uv run infrahubctl schema load schemas --branch azure-management-groups --wait 30
+uv run python scripts/verify_schema.py --branch azure-management-groups
+uv run python scripts/check_azure_hierarchy.py --branch azure-management-groups
+uv run infrahubctl schema load schemas --branch azure-management-groups --wait 30
+uv run python scripts/check_schema.py --branch azure-management-groups
+uv run python scripts/seed_ipam.py --branch azure-management-groups
+```
+
+Loading succeeded; the unchanged reload required no changes, the schema check had
+no diff or warnings, hierarchy validation passed explicitly as empty, and the IPAM
+preview matched all 20 catalog objects. Hierarchy scenarios use offline fixtures;
+no live tenant, management group, or subscription data was created during that
+schema-only integration. The seed workflow below now creates explicitly requested
+planned intent. Synchronization, Azure execution, and policy/RBAC remain deferred.
+
+The branch was merged and the destination verified with:
+
+```sh
+INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge azure-management-groups
+uv run python scripts/verify_schema.py --branch main
+uv run python scripts/check_azure_hierarchy.py --branch main
+uv run python scripts/check_schema.py --branch main
+uv run python scripts/seed_ipam.py --branch main
+```
+
+`main` passed schema and empty-hierarchy verification with no schema diff or
+warnings. The IPAM preview reported `missing=0, skipped=20, conflicting=0`.
+Use a new validation branch for subsequent changes.
+
+## Planned fake-corp seed
+
+Deployed to Infrahub `main` after validation and merge of `fake-corp-hierarchy`.
+
+[data/azure_hierarchy.yaml](data/azure_hierarchy.yaml) defines one tenant named
+`fake-corp` and the 13 management groups from
+[Microsoft's landing-zone diagram](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/landing-zone/media/azure-landing-zone-hierarchy.svg).
+The tenant/root Azure GUIDs start unset. Child IDs have no organization prefix:
+
+```text
+Tenant root group (Azure ID pending)
+└── fake-corp
+    ├── platform
+    │   ├── security
+    │   ├── management
+    │   ├── connectivity
+    │   └── identity
+    ├── landing-zones
+    │   ├── online
+    │   ├── corp
+    │   └── local
+    ├── sandbox
+    └── decommissioned
+```
+
+The catalog has exactly `tenant: {name: ...}`, `root: {display_name: ...}`, and a
+`management_groups` list. Each list entry contains `management_group_id`,
+`display_name`, and `parent`; `parent: null` references the separately declared
+tenant root. Other parents reference group IDs case-insensitively. YAML order is
+irrelevant; the command sorts groups into dependency order. GUIDs, descriptions,
+and subscriptions are not seed-managed fields and are not accepted in this catalog.
+
+The command matches tenants by name, groups by tenant plus case-insensitive group
+ID, and the root by tenant plus absence of a parent. Ambiguous matches fail before
+writes. Tenant names are stable catalog identity keys; changing one means selecting
+a different tenant, not renaming the existing tenant. Group display-name and parent
+edits are conflicts, never overwritten. Existing tenant-name casing differences
+also require resolution. An ID casing difference alone does not create a duplicate.
+
+The preflight validates both the catalog and the entire projected branch hierarchy,
+including unmanaged groups and subscriptions. Existing invalid data can therefore
+block a seed. All conflicts are reported before writes. Apply creates only missing
+objects and never updates, moves, or deletes existing objects. Descriptions and
+other unmanaged fields are preserved. Partial writes are not rolled back: inspect
+and rerun after a failure. Exit status is `0` on success and `1` on invalid input,
+conflicts, or read/write failures. Run one seed writer per branch at a time.
+
+Populate tenant/subscription GUIDs and the root group GUID later in Infrahub through
+a manual update or a future synchronization workflow. The seed omits those fields
+and preserves them on reruns; setting a tenant GUID does not automatically set the
+root GUID. No command in this workflow contacts Azure or creates Azure resources.
+Subscriptions and automatic GUID synchronization remain deferred.
+
+
+The following commands were verified on the Infrahub validation branch:
+
+```sh
+uv run infrahubctl branch create fake-corp-hierarchy
+uv run python scripts/check_schema.py --branch fake-corp-hierarchy
+uv run infrahubctl schema load schemas --branch fake-corp-hierarchy --wait 30
+uv run python scripts/verify_schema.py --branch fake-corp-hierarchy
+uv run python scripts/seed_azure_hierarchy.py --branch fake-corp-hierarchy
+uv run python scripts/seed_azure_hierarchy.py --branch fake-corp-hierarchy --apply
+uv run python scripts/seed_azure_hierarchy.py --branch fake-corp-hierarchy --apply
+uv run python scripts/check_azure_hierarchy.py --branch fake-corp-hierarchy
+uv run infrahubctl schema load schemas --branch fake-corp-hierarchy --wait 30
+uv run python scripts/check_schema.py --branch fake-corp-hierarchy
+uv run python scripts/seed_ipam.py --branch fake-corp-hierarchy
+```
+
+The preview reported 14 missing objects; the first apply created all 14, and the
+second reported `created=0, skipped=14, conflicting=0`. The stored hierarchy passed
+with one tenant, 13 groups, zero subscriptions, and two pending Azure identifiers.
+The schema reload required no changes and the subsequent schema check had no diff
+or warnings. The IPAM preview matched all 20 catalog objects.
+
+
+The merge and destination checks were verified with:
+
+```sh
+INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge fake-corp-hierarchy
+uv run python scripts/verify_schema.py --branch main
+uv run python scripts/check_azure_hierarchy.py --branch main
+uv run python scripts/seed_azure_hierarchy.py --branch main
+uv run python scripts/check_schema.py --branch main
+uv run python scripts/seed_ipam.py --branch main
+```
+
+`main` passed schema and planned-hierarchy validation. The Azure seed preview
+reported `missing=0, skipped=14, conflicting=0`; the IPAM preview reported
+`missing=0, skipped=20, conflicting=0`. Use a fresh validation branch for later
+schema/catalog changes. The seed command defaults to preview; `--apply` creates
+missing objects and `--data PATH` selects another catalog with the same format.
 
 ## Source of truth and project boundaries
 
@@ -295,7 +483,8 @@ separate project.
 The reference catalog supplies standard special-purpose ranges. Choose real
 namespace/VRF names and address allocations before adding operational data.
 
-Next, choose Azure reference/resource data and downstream data interfaces. The
+Next, choose subscriptions and further Azure resource data, GUID synchronization,
+and downstream data interfaces. The
 upstream Azure extension supplies the initial schema, without cloud synchronization
 or deployment execution.
 

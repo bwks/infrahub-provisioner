@@ -9,6 +9,7 @@ from infrahub_sdk import InfrahubClientSync
 app = typer.Typer(help=__doc__, add_completion=False, pretty_exceptions_enable=False)
 
 AZURE_NODES = (
+    "AzureManagementGroup",
     "AzureLocation",
     "AzureTenant",
     "AzureSubscription",
@@ -19,12 +20,49 @@ AZURE_NODES = (
 
 
 def verify_azure(schemas) -> None:
-    for kind in (*AZURE_NODES, "AzureResource"):
+    for kind in (*AZURE_NODES, "AzureResource", "AzureManagementGroupHierarchy"):
         if kind not in schemas:
             raise ValueError(f"{kind} is missing")
     if "AzureResource" not in schemas["AzureVirtualNetwork"].inherit_from:
         raise ValueError("AzureVirtualNetwork must inherit from AzureResource")
+    group = schemas["AzureManagementGroup"]
+    if (
+        group.hierarchy != "AzureManagementGroupHierarchy"
+        or "AzureManagementGroupHierarchy" not in group.inherit_from
+    ):
+        raise ValueError("AzureManagementGroup must use its native hierarchy generic")
+    if "AzureResource" in group.inherit_from:
+        raise ValueError("AzureManagementGroup must not inherit AzureResource")
+    if not any(
+        set(c) == {"tenant", "management_group_id__value"}
+        for c in group.uniqueness_constraints
+    ):
+        raise ValueError("AzureManagementGroup uniqueness must be scoped to tenant")
+    for name in ("management_group_id", "display_name", "description"):
+        attribute = group.get_attribute(name)
+        if attribute.kind != "Text" or attribute.optional != (name != "display_name"):
+            raise ValueError(f"AzureManagementGroup.{name} has an invalid definition")
+    for kind, name in (
+        ("AzureTenant", "tenant_id"),
+        ("AzureSubscription", "subscription_id"),
+    ):
+        attribute = schemas[kind].get_attribute(name)
+        if attribute.kind != "Text" or not attribute.optional:
+            raise ValueError(f"{kind}.{name} must be optional Text")
+    for kind, name, optional in (
+        ("AzureManagementGroup", "tenant", False),
+        ("AzureSubscription", "management_group", True),
+    ):
+        relationship = schemas[kind].get_relationship_or_none(name)
+        if relationship is None or relationship.optional != optional:
+            raise ValueError(f"{kind}.{name} optional must be {optional}")
     relationships = (
+        ("AzureTenant", "management_groups", "AzureManagementGroup", "many"),
+        ("AzureManagementGroup", "tenant", "AzureTenant", "one"),
+        ("AzureManagementGroup", "subscriptions", "AzureSubscription", "many"),
+        ("AzureManagementGroup", "parent", "AzureManagementGroupHierarchy", "one"),
+        ("AzureManagementGroup", "children", "AzureManagementGroupHierarchy", "many"),
+        ("AzureSubscription", "management_group", "AzureManagementGroup", "one"),
         ("AzureTenant", "subscriptions", "AzureSubscription", "many"),
         ("AzureSubscription", "tenant", "AzureTenant", "one"),
         ("AzureSubscription", "resourcegroups", "AzureResourceGroup", "many"),

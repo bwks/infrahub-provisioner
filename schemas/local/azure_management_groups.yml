@@ -1,0 +1,71 @@
+# Repository-owned additive extension; vendored Azure schemas remain unchanged.
+version: "1.0"
+generics:
+  - name: ManagementGroupHierarchy
+    namespace: Azure
+    hierarchical: true
+    include_in_menu: false
+nodes:
+  - name: ManagementGroup
+    namespace: Azure
+    label: Management Groups
+    menu_placement: AzureResource
+    include_in_menu: true
+    inherit_from:
+      - AzureManagementGroupHierarchy
+    parent: AzureManagementGroupHierarchy
+    children: AzureManagementGroupHierarchy
+    display_label: display_name__value
+    uniqueness_constraints:
+      - [tenant, management_group_id__value]
+    attributes:
+      - name: management_group_id
+        kind: Text
+        optional: true
+      - name: display_name
+        kind: Text
+        optional: false
+      - name: description
+        kind: Text
+        optional: true
+    relationships:
+      - name: tenant
+        peer: AzureTenant
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: azure_tenant__management_groups
+      - name: subscriptions
+        peer: AzureSubscription
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: azure_management_group__subscriptions
+  - name: Tenant
+    namespace: Azure
+    display_label: name__value
+    attributes:
+      - name: tenant_id
+        kind: Text
+        optional: true
+    relationships:
+      - name: management_groups
+        peer: AzureManagementGroup
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: azure_tenant__management_groups
+  - name: Subscription
+    namespace: Azure
+    display_label: name__value
+    attributes:
+      - name: subscription_id
+        kind: Text
+        optional: true
+    relationships:
+      - name: management_group
+        peer: AzureManagementGroup
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: azure_management_group__subscriptions

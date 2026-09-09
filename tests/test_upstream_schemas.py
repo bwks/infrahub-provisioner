@@ -13,7 +13,12 @@ FILES = json.loads((ROOT / "third_party/schema-library/manifest.json").read_text
 
 
 def test_schema_file_inventory_matches_manifest():
-    actual = {str(path.relative_to(ROOT)) for path in (ROOT / "schemas").glob("*.yml")}
+    actual = {
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "schemas").rglob("*")
+        if path.suffix in {".yml", ".yaml"}
+        and not path.is_relative_to(ROOT / "schemas/local")
+    }
     assert actual == set(FILES)
 
 
