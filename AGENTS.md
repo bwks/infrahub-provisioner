@@ -254,14 +254,15 @@ after it was empty. The original default namespace and its designation remain.
 ## Planned Azure hierarchy seed
 
 The fake-corp catalog is deployed to Infrahub `main` after validation and merge of
-`fake-corp-hierarchy`: one tenant, 13 groups, no subscriptions, and two pending
-Azure GUIDs. The original IPAM catalog is unchanged.
+`fake-corp-hierarchy`, extended by `azure-subscriptions`: one tenant, 13 groups,
+12 subscriptions, and 14 pending Azure GUIDs. The original IPAM catalog is unchanged.
 
 - Use `uv run python scripts/seed_azure_hierarchy.py --branch <branch>` for read-only
   preview; add `--apply` to create missing catalog objects. `--data` selects YAML.
 - `data/azure_hierarchy.yaml` owns the fake-corp tenant name, root display name, and
   12 non-root group IDs, display names, and parents. IDs have no organization prefix.
-  Together with the tenant root there are 13 management groups; no subscriptions.
+  Together with the tenant root there are 13 management groups. The optional
+  `subscriptions` list contains name, management_group ID, and initial status.
 - Match tenants by stable catalog name, groups by tenant plus case-insensitive group
   ID, and the root by tenant plus no parent. Reject ambiguous matches. Tenant-name
   changes select a different tenant; the seed does not implement renames.
@@ -293,3 +294,33 @@ Azure GUIDs. The original IPAM catalog is unchanged.
   Include restricted public regions, exclude future/sovereign regions, and refresh
   the dated Microsoft reference snapshot deliberately. No live Azure discovery,
   AWS regions, country groups, availability zones, or deployment execution.
+
+
+## Landing-zone subscriptions
+
+- Seed the 12 diagram subscriptions through the existing Azure hierarchy command.
+  Use readable names without the word Subscription or an organization prefix.
+  Corp holds A1, A2, and P1; Local holds LC1 and LA1; Sandbox holds 1 and 2;
+  the four Platform child groups and Decommissioned each hold one. Online is empty.
+- Match subscription names case-insensitively within their tenant. Reject ambiguous
+  matches and conflicting names/membership before any writes. Create subscriptions
+  after groups; include them in projected complete-hierarchy validation.
+- Status is creation-only: Decommissioned starts Deprecated, the other 11 Planned.
+  Leave subscription GUIDs unset and preserve later GUID/status edits. Catalogs
+  without subscriptions remain supported. No schema changes or Azure execution.
+
+
+## Azure key/value tags
+
+- `schemas/local/resource_tags.yml` adds AzureTaggable inheritance to subscriptions,
+  resource groups, and VNets. Keep it after the other local Azure extensions in
+  schema discovery order; verify all three owner types on the live composed schema.
+- AzureTag is an independently owned key/value assignment, with one owner and no
+  shared-value propagation. Existing BuiltinTag labels remain separate and intact.
+  Do not add Azure tags to tenants, management groups, regions, or subnets.
+- `uv run python scripts/check_azure_tags.py --branch <branch>` validates ownership,
+  case-insensitive keys, Azure character/length limits, and 50 tags per owner.
+  It is read-only, paginated, returns 0 for valid/empty and 1 for invalid/read failure.
+  Schema exact-key constraints and the CLI case-insensitive gate are distinct.
+- No live tag values are seeded. Preserve operational assignments on all seed
+  reruns. Policy inheritance, Azure synchronization, and execution remain deferred.

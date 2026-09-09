@@ -9,9 +9,10 @@ extend toward Azure and external Terraform/OpenTofu consumers.
 The repository provides unmodified upstream base, VRF, and Azure schemas, a locked Python
 environment, a local Azure management-group extension, an SDK-based schema check,
 read-only verification of the deployed models and Azure hierarchy, and a
-create-only seed workflow for planned Azure management groups. Infrahub `main`
-contains the `fake-corp` tenant and 13 management groups with tenant/root GUIDs
-pending; subscriptions and other Azure resource inventories are empty.
+create-only seed workflows for Azure intent and cloud locations. Infrahub `main`
+contains the `fake-corp` tenant, 13 management groups, 12 subscriptions with Azure
+GUIDs pending, and the 57-region reference catalog. Other Azure resource inventories
+are empty.
 
 The upstream base and VRF schemas are deployed on the lab’s `main` branch after
 validation and merge of `upstream-ipam`. No sample or operational objects were loaded during schema setup.
@@ -457,12 +458,13 @@ Tenant root group (Azure ID pending)
     └── decommissioned
 ```
 
-The catalog has exactly `tenant: {name: ...}`, `root: {display_name: ...}`, and a
-`management_groups` list. Each list entry contains `management_group_id`,
+The catalog contains `tenant: {name: ...}`, `root: {display_name: ...}`, a
+`management_groups` list, and an optional `subscriptions` list. Each list entry contains `management_group_id`,
 `display_name`, and `parent`; `parent: null` references the separately declared
 tenant root. Other parents reference group IDs case-insensitively. YAML order is
-irrelevant; the command sorts groups into dependency order. GUIDs, descriptions,
-and subscriptions are not seed-managed fields and are not accepted in this catalog.
+irrelevant; the command sorts groups into dependency order and creates subscriptions
+after their tenant and groups. GUIDs and descriptions are not accepted seed fields.
+Catalogs without a subscriptions section remain supported.
 
 The command matches tenants by name, groups by tenant plus case-insensitive group
 ID, and the root by tenant plus absence of a parent. Ambiguous matches fail before
@@ -483,7 +485,7 @@ Populate tenant/subscription GUIDs and the root group GUID later in Infrahub thr
 a manual update or a future synchronization workflow. The seed omits those fields
 and preserves them on reruns; setting a tenant GUID does not automatically set the
 root GUID. No command in this workflow contacts Azure or creates Azure resources.
-Subscriptions and automatic GUID synchronization remain deferred.
+Automatic GUID synchronization and Azure deployment execution remain deferred.
 
 
 The following commands were verified on the Infrahub validation branch:
@@ -525,6 +527,59 @@ reported `missing=0, skipped=14, conflicting=0`; the IPAM preview reported
 `missing=0, skipped=20, conflicting=0`. Use a fresh validation branch for later
 schema/catalog changes. The seed command defaults to preview; `--apply` creates
 missing objects and `--data PATH` selects another catalog with the same format.
+
+## Landing-zone subscription seed
+
+The hierarchy catalog now includes these 12 subscriptions under `fake-corp`:
+
+| Management group | Subscription names | Initial status |
+| --- | --- | --- |
+| Security | Security | Planned |
+| Management | Management | Planned |
+| Connectivity | Connectivity | Planned |
+| Identity | Identity | Planned |
+| Corp | Landing zone A1; Landing zone A2; Landing zone P1 | Planned |
+| Local | Landing zone LC1 (Azure Local Clusters); Landing zone LA1 (Applications) | Planned |
+| Sandbox | Sandbox 1; Sandbox 2 | Planned |
+| Decommissioned | Decommissioned | Deprecated |
+
+Online remains empty, matching the diagram. Each subscription entry contains
+`name`, `management_group` (the existing group ID), and `status`. Subscription GUIDs
+remain unset; none are invented. This adds data using the existing schema.
+
+Subscription identity is tenant plus case-insensitive name. Duplicate catalog names,
+ambiguous existing matches, exact-name differences, and membership conflicts block
+all writes. Identical names in different tenants are allowed. Status is used only
+on creation; reruns preserve GUIDs, status edits, and other operational fields.
+Changing a catalog name selects a different identity; this is not a rename workflow.
+The complete projected hierarchy is validated before writes, including subscriptions.
+
+Verified subscription workflow:
+
+```sh
+uv run infrahubctl branch create azure-subscriptions
+uv run python scripts/check_schema.py --branch azure-subscriptions
+uv run python scripts/seed_azure_hierarchy.py --branch azure-subscriptions
+uv run python scripts/seed_azure_hierarchy.py --branch azure-subscriptions --apply
+uv run python scripts/seed_azure_hierarchy.py --branch azure-subscriptions --apply
+uv run python scripts/check_azure_hierarchy.py --branch azure-subscriptions
+uv run python scripts/verify_schema.py --branch azure-subscriptions
+uv run python scripts/seed_cloud_locations.py --branch azure-subscriptions
+uv run python scripts/seed_ipam.py --branch azure-subscriptions
+```
+
+The schema diff was empty. First apply created 12 subscriptions and matched the
+existing 14 hierarchy objects; the rerun created zero and matched all 26. Hierarchy
+validation reports 14 pending identifiers (tenant, root group, and 12 subscription
+GUIDs). All 218 offline tests and Ruff checks passed, including paginated subscription
+reads, late preflight conflicts, partial-write recovery, and operational edit preservation.
+
+Merged with `INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge azure-subscriptions`.
+On `main`, the schema and hierarchy verifiers and all three seed previews passed.
+All 12 subscription names, memberships, initial statuses, and empty GUIDs were
+verified; tenant, management-group, region, location-group, namespace, and prefix
+IDs were preserved. Earlier 14-object counts above describe the original group-only
+seed milestone; the current hierarchy catalog manages 26 objects.
 
 ## Azure lifecycle status
 
@@ -653,6 +708,81 @@ previews, and management-group hierarchy validation passed there. Exact region
 ancestors, readable names, Unmanaged statuses, and the empty AWS group were checked;
 the original tenant, management-group, namespace, and prefix IDs were preserved.
 
+## Azure key/value tags
+
+`schemas/local/resource_tags.yml` adds `AzureTag` assignments owned by one
+subscription, resource group, or virtual network through the `AzureTaggable`
+generic. The extension sorts after the other local Azure extensions so their
+relationships and the added inheritance are composed together. Vendored schemas
+remain unchanged. Azure Tags are available at `/objects/AzureTag`.
+
+```mermaid
+classDiagram
+    AzureTaggable <|-- AzureSubscription
+    AzureTaggable <|-- AzureResourceGroup
+    AzureTaggable <|-- AzureVirtualNetwork
+    AzureResource <|-- AzureVirtualNetwork
+    AzureTaggable "1" *-- "0..50" AzureTag : tags
+    class AzureTag {
+        Text key
+        Text value
+        Relationship owner
+    }
+```
+
+Each assignment has a required owner, key, and value, displayed as `key=value`.
+Values are independent: a subscription could have `Environment=Production` and a
+VNet `Environment=Test`; editing the VNet assignment affects only that VNet.
+These are documentation examples, not seeded values. No tag values are created by
+this change. Existing seed workflows preserve operational tag assignments.
+
+Subscriptions and resource groups do not automatically propagate tags to children.
+Tenants, management groups, regions, and subnets do not receive Azure tag support.
+Regions and location groups retain their separate `BuiltinTag` label relationships;
+those are Infrahub classification labels, not Azure key/value assignments. The
+existing hierarchy, ownership, region, and IPAM relationships remain intact.
+
+The schema declares one required owner, owner-plus-exact-key uniqueness, at most
+50 assignments per owner, key length 1–512, value length at most 256, and prohibited
+key characters `< > % & \ ? /`. Empty string values are permitted. Keys preserve
+casing; values are case-sensitive. Case-insensitive duplicate keys are additionally
+checked by `scripts/check_azure_tags.py --branch <branch>`, a read-only CLI gate.
+It reads all owners and assignments with SDK pagination, checks ownership and all
+naming/count limits, reports all findings, and returns 0 for valid/empty inventories
+or 1 for invalid data/read failures. The CLI does not automatically run on UI/API
+writes; use it before consuming intent for deployment.
+
+The rules follow [Microsoft's Azure tag documentation](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/tag-resources).
+No Azure synchronization, policy-based propagation, or deployment execution is
+implemented. Adding other resource types requires checking their tag support and
+any type-specific restrictions first.
+
+Verified branch commands:
+
+```sh
+uv run infrahubctl branch create azure-tags
+uv run python scripts/check_schema.py --branch azure-tags
+uv run infrahubctl schema load schemas --branch azure-tags --wait 30
+uv run python scripts/verify_schema.py --branch azure-tags
+uv run python scripts/check_azure_tags.py --branch azure-tags
+```
+
+The branch schema exposes all three supported owner types, preserves built-in
+location labels, and contains zero AzureTag records with 12 eligible owners.
+Offline validation passed 249 tests and Ruff checks. Empty tag values and invalid
+assignment scenarios were tested offline; no sample tags were written live.
+
+An unchanged branch reload and schema check required no changes. All three seed
+previews and the complete management-group hierarchy gate passed on `azure-tags`.
+Merged using `INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge azure-tags`.
+On `main`, schema verification, tag validation, the empty schema diff, and all
+three seed previews passed. Existing tenant, group, subscription, region, location,
+namespace, prefix, and built-in tag IDs were preserved; AzureTag remains empty.
+
+```sh
+uv run python scripts/check_azure_tags.py --branch main
+```
+
 ## Source of truth and project boundaries
 
 Git holds schema definitions and bootstrap configuration. Infrahub holds operational
@@ -669,7 +799,7 @@ separate project.
 The reference catalog supplies standard special-purpose ranges. Choose real
 namespace/VRF names and address allocations before adding operational data.
 
-Next, choose subscriptions and further Azure resource data, GUID synchronization,
+Next, choose further Azure resource data, GUID synchronization,
 and downstream data interfaces. The
 upstream Azure extension supplies the initial schema, without cloud synchronization
 or deployment execution.

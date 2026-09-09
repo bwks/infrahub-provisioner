@@ -14,7 +14,9 @@ from scripts import seed_azure_hierarchy as module
 
 @pytest.fixture
 def catalog():
-    return module.load_catalog(Path("data/azure_hierarchy.yaml"))
+    catalog = module.load_catalog(Path("data/azure_hierarchy.yaml"))
+    catalog.pop("subscriptions")
+    return catalog
 
 
 @pytest.fixture
@@ -37,6 +39,14 @@ def client():
                 "parent": None,
             }
         )
+        if kind == "AzureSubscription":
+            values = {
+                "name": None,
+                "subscription_id": None,
+                "tenant": None,
+                "management_group": None,
+                "status": None,
+            }
         values.update(data)
         node = NS(
             id=f"node-{client.create.call_count}",
@@ -44,7 +54,7 @@ def client():
                 key: NS(
                     **(
                         {"id": value}
-                        if key in ("tenant", "parent")
+                        if key in ("tenant", "parent", "management_group")
                         else {"value": value}
                     )
                 )
@@ -182,6 +192,7 @@ def test_conflicts_prevent_all_writes(client, catalog, edit):
         client.inventory["AzureSubscription"].append(
             NS(
                 id="sub",
+                name=NS(value="unmanaged"),
                 subscription_id=NS(value=None),
                 tenant=NS(id=tenant.id),
                 management_group=NS(id=None),
@@ -300,7 +311,7 @@ def test_cli_options(monkeypatch, tmp_path, client, apply):
         ["--apply"] if apply else []
     )
     assert CliRunner().invoke(module.app, args).exit_code == 0
-    assert client.create.call_count == (14 if apply else 0)
+    assert client.create.call_count == (26 if apply else 0)
 
 
 def test_cli_read_failure_redacted(monkeypatch, client):
@@ -324,3 +335,174 @@ def test_seed_preserves_operational_status(client, catalog):
     assert {n.id: n.status.value for n in nodes} == before
     for node in nodes:
         node.save.assert_called_once()
+
+
+@pytest.fixture
+def subscription_catalog():
+    return module.load_catalog(Path("data/azure_hierarchy.yaml"))
+
+
+def test_subscription_catalog(subscription_catalog):
+    subs = subscription_catalog["subscriptions"]
+    assert {s["name"]: s["management_group"] for s in subs} == {
+        "Security": "security",
+        "Management": "management",
+        "Connectivity": "connectivity",
+        "Identity": "identity",
+        "Landing zone A1": "corp",
+        "Landing zone A2": "corp",
+        "Landing zone P1": "corp",
+        "Landing zone LC1 (Azure Local Clusters)": "local",
+        "Landing zone LA1 (Applications)": "local",
+        "Sandbox 1": "sandbox",
+        "Sandbox 2": "sandbox",
+        "Decommissioned": "decommissioned",
+    }
+    assert all(
+        s["status"] == ("deprecated" if s["name"] == "Decommissioned" else "planned")
+        for s in subs
+    )
+    assert all("subscription_id" not in s for s in subs)
+
+
+def test_subscription_create_then_preserve(client, subscription_catalog):
+    assert module.seed(client, "validation", subscription_catalog) == 0
+    client.create.assert_not_called()
+    assert module.seed(client, "validation", subscription_catalog, True) == 0
+    subs = client.inventory["AzureSubscription"]
+    assert len(subs) == 12
+    assert client.create.call_count == 26
+    assert all(n.subscription_id.value is None for n in subs)
+    groups = {
+        g.id: g.management_group_id.value
+        for g in client.inventory["AzureManagementGroup"]
+    }
+    for sub, entry in zip(subs, subscription_catalog["subscriptions"], strict=True):
+        assert sub.name.value == entry["name"]
+        assert groups[sub.management_group.id] == entry["management_group"]
+        assert sub.status.value == entry["status"]
+    assert all(
+        call.kwargs["kind"] == "AzureSubscription"
+        for call in client.create.call_args_list[14:]
+    )
+    for index, sub in enumerate(subs):
+        sub.subscription_id.value = f"aaaaaaaa-aaaa-4aaa-8aaa-{index:012d}"
+        sub.status.value = "active"
+    before = [(s.id, s.subscription_id.value, s.status.value) for s in subs]
+    client.create.reset_mock()
+    assert module.seed(client, "validation", subscription_catalog, True) == 0
+    client.create.assert_not_called()
+    assert before == [(s.id, s.subscription_id.value, s.status.value) for s in subs]
+    assert all(s.save.call_count == 1 for s in subs)
+
+
+@pytest.mark.parametrize(
+    "edit", ["duplicate", "unknown_group", "bad_status", "guid", "null", "empty_name"]
+)
+def test_invalid_subscription_catalog(tmp_path, subscription_catalog, edit):
+    subs = subscription_catalog["subscriptions"]
+    if edit == "duplicate":
+        subs.append({**subs[0], "name": subs[0]["name"].upper()})
+    elif edit == "unknown_group":
+        subs[0]["management_group"] = "missing"
+    elif edit == "bad_status":
+        subs[0]["status"] = "decommissioned"
+    elif edit == "guid":
+        subs[0]["subscription_id"] = None
+    elif edit == "null":
+        subscription_catalog["subscriptions"] = None
+    else:
+        subs[0]["name"] = " "
+    path = tmp_path / "subscriptions.yaml"
+    path.write_text(yaml.safe_dump(subscription_catalog))
+    with pytest.raises(ValueError):
+        module.load_catalog(path)
+
+
+@pytest.mark.parametrize(
+    "edit", ["duplicate", "name_case", "membership", "cross_tenant", "invalid_guid"]
+)
+def test_subscription_conflicts_block_missing_group_and_sub(
+    client, subscription_catalog, edit
+):
+    assert module.seed(client, "validation", subscription_catalog, True) == 0
+    subs = client.inventory["AzureSubscription"]
+    subs.pop()
+    client.inventory["AzureManagementGroup"].pop()
+    sub = subs[0]
+    if edit == "duplicate":
+        duplicate = deepcopy(sub)
+        duplicate.id = "duplicate"
+        duplicate.name.value = duplicate.name.value.upper()
+        subs.append(duplicate)
+    elif edit == "name_case":
+        sub.name.value = sub.name.value.upper()
+    elif edit == "membership":
+        sub.management_group.id = subs[1].management_group.id
+    elif edit == "cross_tenant":
+        sub.tenant.id = "missing-tenant"
+    else:
+        sub.subscription_id.value = "not-a-guid"
+    client.create.reset_mock()
+    assert module.seed(client, "validation", subscription_catalog, True) == 1
+    client.create.assert_not_called()
+
+
+def test_same_subscription_names_in_other_tenant(client, subscription_catalog):
+    assert module.seed(client, "validation", subscription_catalog, True) == 0
+    other = deepcopy(subscription_catalog)
+    other["tenant"]["name"] = "another-corp"
+    assert module.seed(client, "validation", other, True) == 0
+    assert len(client.inventory["AzureSubscription"]) == 24
+    client.create.reset_mock()
+    assert module.seed(client, "validation", subscription_catalog, True) == 0
+    client.create.assert_not_called()
+
+
+def test_subscription_partial_failure_resumes(client, subscription_catalog, capsys):
+    operation = client.create.side_effect
+
+    def fail(**kwargs):
+        node = operation(**kwargs)
+        if client.create.call_count == 17:
+            node.save.side_effect = RuntimeError("private")
+        return node
+
+    client.create.side_effect = fail
+    with pytest.raises(RuntimeError):
+        module.seed(client, "validation", subscription_catalog, True)
+    assert "created=16" in capsys.readouterr().err
+    client.create.side_effect = operation
+    assert module.seed(client, "validation", subscription_catalog, True) == 0
+    assert len(client.inventory["AzureSubscription"]) == 12
+
+
+def test_optional_subscriptions_backward_compatible(tmp_path, catalog):
+    path = tmp_path / "old.yaml"
+    path.write_text(yaml.safe_dump(catalog))
+    assert module.load_catalog(path).get("subscriptions", []) == []
+
+
+def test_cli_subscription_conflict(monkeypatch, client, subscription_catalog):
+    module.seed(client, "validation", subscription_catalog, True)
+    client.inventory["AzureSubscription"][0].management_group.id = None
+    client.create.reset_mock()
+    monkeypatch.setattr(module, "InfrahubClientSync", lambda: client)
+    result = CliRunner().invoke(module.app, ["--branch", "validation", "--apply"])
+    assert result.exit_code == 1
+    client.create.assert_not_called()
+
+
+def test_seed_preserves_subscription_tag_assignments(client, subscription_catalog):
+    module.seed(client, "validation", subscription_catalog, True)
+    subs = client.inventory["AzureSubscription"]
+    for i, sub in enumerate(subs):
+        sub.tags = NS(peers=[NS(id=f"tag-{i}", key="Environment", value=f"Value {i}")])
+    before = {s.id: [(t.id, t.key, t.value) for t in s.tags.peers] for s in subs}
+    client.create.reset_mock()
+    assert module.seed(client, "validation", subscription_catalog, True) == 0
+    assert before == {
+        s.id: [(t.id, t.key, t.value) for t in s.tags.peers] for s in subs
+    }
+    client.create.assert_not_called()
+    assert all(s.save.call_count == 1 for s in subs)

@@ -30,7 +30,17 @@ def text(value, label):
 
 def load_catalog(path: Path) -> dict:
     catalog = yaml.safe_load(path.read_text())
-    fields(catalog, ["tenant", "root", "management_groups"], "Catalog")
+    required = ["tenant", "root", "management_groups"]
+    fields(
+        catalog,
+        required
+        + (
+            ["subscriptions"]
+            if isinstance(catalog, dict) and "subscriptions" in catalog
+            else []
+        ),
+        "Catalog",
+    )
     fields(catalog["tenant"], ["name"], "Tenant")
     fields(catalog["root"], ["display_name"], "Root")
     text(catalog["tenant"]["name"], "Tenant name")
@@ -66,7 +76,27 @@ def load_catalog(path: Path) -> dict:
                 f"group:{parent_key}" if parent_key is not None else "root",
             )
         )
-    findings = validate([Tenant("tenant", None)], projected, [])
+    subscription_entries = catalog.get("subscriptions", [])
+    if not isinstance(subscription_entries, list):
+        raise ValueError("subscriptions must be a list")
+    names = set()
+    projected_subscriptions = []
+    for entry in subscription_entries:
+        fields(entry, ["name", "management_group", "status"], "Subscription")
+        name = text(entry["name"], "Subscription name")
+        group = text(entry["management_group"], f"{name} management_group").casefold()
+        status = text(entry["status"], f"{name} status")
+        if name.casefold() in names:
+            raise ValueError(f"Duplicate subscription name: {name}")
+        names.add(name.casefold())
+        if group not in by_id:
+            raise ValueError(f"{name}: unknown management group {group}")
+        if status not in {"planned", "active", "reserved", "deprecated", "unmanaged"}:
+            raise ValueError(f"{name}: invalid subscription status {status}")
+        projected_subscriptions.append(
+            Subscription(f"subscription:{name}", None, "tenant", f"group:{group}")
+        )
+    findings = validate([Tenant("tenant", None)], projected, projected_subscriptions)
     if findings:
         raise ValueError("Invalid catalog hierarchy: " + "; ".join(findings))
     # Topological order, independent of YAML entry order.
@@ -98,7 +128,7 @@ def seed(client, branch: str, catalog: dict, apply: bool = False) -> int:
     subscriptions = client.all(
         kind="AzureSubscription",
         branch=branch,
-        include=["subscription_id", "tenant", "management_group"],
+        include=["name", "subscription_id", "tenant", "management_group"],
         populate_store=False,
     )
     conflicts = []
@@ -178,10 +208,42 @@ def seed(client, branch: str, catalog: dict, apply: bool = False) -> int:
                 )
             )
             pending.append((key, entry))
+    pending_subscriptions = []
+    for entry in catalog.get("subscriptions", []):
+        name = entry["name"]
+        group_id = resolved[entry["management_group"].casefold()]
+        matches = [
+            sub
+            for sub in subscriptions
+            if sub.tenant.id == tenant_id
+            and sub.name.value.casefold() == name.casefold()
+        ]
+        if len(matches) > 1:
+            conflicts.append(
+                f"Ambiguous subscription {name!r} in tenant {tenant_id}: {[n.id for n in matches]}"
+            )
+        if matches:
+            existing = matches[0]
+            changed = []
+            if existing.name.value != name:
+                changed.append("name")
+            if existing.management_group.id != group_id:
+                changed.append("management_group")
+            if changed:
+                conflicts.append(
+                    f"Subscription {name} ({existing.id}): {', '.join(changed)}"
+                )
+            else:
+                skipped += 1
+        else:
+            pending_subscriptions.append(entry)
+            projected_subscriptions.append(
+                Subscription(f"planned:subscription:{name}", None, tenant_id, group_id)
+            )
     conflicts.extend(
         validate(projected_tenants, projected_groups, projected_subscriptions)
     )
-    missing = len(pending) + int(tenant is None)
+    missing = len(pending) + len(pending_subscriptions) + int(tenant is None)
     for conflict in conflicts:
         typer.echo(f"Conflict: {conflict}", err=True)
     typer.echo(
@@ -195,6 +257,10 @@ def seed(client, branch: str, catalog: dict, apply: bool = False) -> int:
     for key, entry in pending:
         typer.echo(
             f"Would create group: {key or 'tenant root'} ({entry['display_name']})"
+        )
+    for entry in pending_subscriptions:
+        typer.echo(
+            f"Would create subscription: {entry['name']} -> {entry['management_group']} ({entry['status']})"
         )
     if not apply:
         typer.echo("Preview only; created=0. Use --apply to create missing entries.")
@@ -219,6 +285,19 @@ def seed(client, branch: str, catalog: dict, apply: bool = False) -> int:
             node.save()
             created += 1
             resolved[key] = node.id
+        for entry in pending_subscriptions:
+            node = client.create(
+                kind="AzureSubscription",
+                branch=branch,
+                data={
+                    "name": entry["name"],
+                    "tenant": tenant.id,
+                    "management_group": resolved[entry["management_group"].casefold()],
+                    "status": entry["status"],
+                },
+            )
+            node.save()
+            created += 1
     except Exception:
         typer.echo(
             f"Apply interrupted: created={created}, skipped={skipped}. Inspect the branch and rerun; no rollback was attempted.",

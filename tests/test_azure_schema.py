@@ -19,6 +19,7 @@ def schemas():
         Path("schemas/local/azure_management_groups.yml"),
         Path("schemas/local/azure_status.yml"),
         Path("schemas/local/cloud_locations.yml"),
+        Path("schemas/local/resource_tags.yml"),
     ):
         data = yaml.safe_load(path.read_text())
         for section in ("generics", "nodes"):
@@ -342,3 +343,159 @@ def test_cloud_seed_uses_sdk_pagination(schemas, monkeypatch, capsys):
     assert all(
         call.kwargs["branch_name"] == "validation" for call in operation.call_args_list
     )
+
+
+def test_subscription_seed_reads_all_sdk_pages(schemas, monkeypatch, capsys):
+    from types import SimpleNamespace as NS
+    from unittest.mock import MagicMock
+    from infrahub_sdk import InfrahubClientSync
+    from scripts.seed_azure_hierarchy import seed
+
+    client = InfrahubClientSync()
+    client.pagination_size = 1
+    monkeypatch.setattr(client.schema, "get", lambda kind, **kwargs: schemas[kind])
+    tenant = NS(id="t", name=NS(value="fake-corp"), tenant_id=NS(value=None))
+    groups = [
+        NS(
+            id="root",
+            management_group_id=NS(value=None),
+            display_name=NS(value="Root"),
+            tenant=NS(id="t"),
+            parent=NS(id=None),
+        ),
+        NS(
+            id="security",
+            management_group_id=NS(value="security"),
+            display_name=NS(value="Security"),
+            tenant=NS(id="t"),
+            parent=NS(id="root"),
+        ),
+    ]
+    all_nodes = client.all
+
+    def read(kind, **kwargs):
+        if kind == "AzureTenant":
+            return [tenant]
+        if kind == "AzureManagementGroup":
+            return groups
+        return all_nodes(kind=kind, **kwargs)
+
+    monkeypatch.setattr(client, "all", read)
+    responses = []
+    for i, name in enumerate(["Security", "Unmanaged extra"]):
+        node = {
+            "id": f"s{i}",
+            "__typename": "AzureSubscription",
+            "name": {"value": name},
+            "subscription_id": {"value": None},
+            "tenant": {"node": {"id": "t", "__typename": "AzureTenant"}},
+            "management_group": {
+                "node": {"id": "security", "__typename": "AzureManagementGroup"}
+            },
+        }
+        responses.append({"AzureSubscription": {"count": 2, "edges": [{"node": node}]}})
+    responses.append({"AzureSubscription": {"count": 2, "edges": []}})
+    operation = MagicMock(side_effect=responses)
+    monkeypatch.setattr(client, "execute_graphql", operation)
+    catalog = {
+        "tenant": {"name": "fake-corp"},
+        "root": {"display_name": "Root"},
+        "management_groups": [
+            {
+                "management_group_id": "security",
+                "display_name": "Security",
+                "parent": None,
+            }
+        ],
+        "subscriptions": [
+            {"name": "Security", "management_group": "security", "status": "planned"}
+        ],
+    }
+    assert seed(client, "validation", catalog) == 0
+    assert "missing=0, skipped=4" in capsys.readouterr().out
+    assert "offset: 1" in operation.call_args_list[1].kwargs["query"]
+    assert all(
+        call.kwargs["branch_name"] == "validation" for call in operation.call_args_list
+    )
+
+
+def test_tag_schema_contract(schemas):
+    from scripts.verify_schema import verify_tags
+
+    verify_tags(schemas)
+
+
+@pytest.mark.parametrize("edit", ["owner", "unique", "limit", "unsupported", "builtin"])
+def test_invalid_tag_schema(schemas, edit):
+    from scripts.verify_schema import verify_tags
+
+    if edit == "owner":
+        schemas["AzureTag"].get_relationship("owner").optional = True
+    elif edit == "unique":
+        schemas["AzureTag"].uniqueness_constraints = []
+    elif edit == "limit":
+        schemas["AzureTaggable"].get_relationship("tags").max_count = 0
+    elif edit == "unsupported":
+        schemas["AzureTenant"].inherit_from = ["AzureTaggable"]
+    else:
+        schemas["AzureRegion"].get_relationship("tags").peer = "AzureTag"
+    with pytest.raises(ValueError):
+        verify_tags(schemas)
+
+
+def test_tag_checker_pagination(schemas, monkeypatch, capsys):
+    from infrahub_sdk import InfrahubClientSync
+    from unittest.mock import MagicMock
+    from scripts.check_azure_tags import check
+
+    client = InfrahubClientSync()
+    client.pagination_size = 1
+    schemas["AzureTaggable"].used_by = [
+        "AzureSubscription",
+        "AzureResourceGroup",
+        "AzureVirtualNetwork",
+    ]
+    monkeypatch.setattr(client.schema, "get", lambda kind, **kwargs: schemas[kind])
+    responses = [
+        {
+            "AzureTaggable": {
+                "count": 1,
+                "edges": [{"node": {"id": "owner", "__typename": "AzureSubscription"}}],
+            }
+        },
+        {"AzureTaggable": {"count": 1, "edges": []}},
+    ]
+    for i in range(2):
+        responses.append(
+            {
+                "AzureTag": {
+                    "count": 2,
+                    "edges": [
+                        {
+                            "node": {
+                                "id": f"tag{i}",
+                                "__typename": "AzureTag",
+                                "key": {"value": f"key{i}"},
+                                "value": {"value": ""},
+                                "owner": {
+                                    "node": {
+                                        "id": "owner",
+                                        "__typename": "AzureSubscription",
+                                    }
+                                },
+                            }
+                        }
+                    ],
+                }
+            }
+        )
+    responses.append({"AzureTag": {"count": 2, "edges": []}})
+    operation = MagicMock(side_effect=responses)
+    monkeypatch.setattr(client, "execute_graphql", operation)
+    assert check(client, "test") == 0
+    assert "2 tags" in capsys.readouterr().out
+    assert any(
+        "offset: 1" in c.kwargs["query"] and "AzureTag(" in c.kwargs["query"]
+        for c in operation.call_args_list
+    )
+    assert all(c.kwargs["branch_name"] == "test" for c in operation.call_args_list)

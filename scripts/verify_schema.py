@@ -123,9 +123,50 @@ def verify_azure(schemas) -> None:
             raise ValueError(f"{kind}.{name} must refer to {cardinality} {peer}")
 
 
+def verify_tags(schemas) -> None:
+    for kind in ("AzureTag", "AzureTaggable"):
+        if kind not in schemas:
+            raise ValueError(f"{kind} is missing")
+    tag = schemas["AzureTag"]
+    for name in ("key", "value"):
+        attribute = tag.get_attribute_or_none(name)
+        if attribute is None or attribute.kind != "Text" or attribute.optional:
+            raise ValueError(f"AzureTag.{name} must be required Text")
+    if not any(set(c) == {"owner", "key__value"} for c in tag.uniqueness_constraints):
+        raise ValueError("AzureTag uniqueness must be scoped to owner and key")
+    owner = tag.get_relationship("owner")
+    if (
+        owner.peer != "AzureTaggable"
+        or owner.cardinality != "one"
+        or owner.optional
+        or owner.kind != "Parent"
+    ):
+        raise ValueError("AzureTag.owner must be one required AzureTaggable parent")
+    supported = {"AzureSubscription", "AzureResourceGroup", "AzureVirtualNetwork"}
+    for kind in (*supported, "AzureTaggable"):
+        rel = schemas[kind].get_relationship_or_none("tags")
+        if (
+            rel is None
+            or rel.peer != "AzureTag"
+            or rel.cardinality != "many"
+            or not rel.optional
+            or rel.kind != "Component"
+            or rel.max_count != 50
+            or rel.identifier != owner.identifier
+        ):
+            raise ValueError(f"{kind}.tags must expose up to 50 owned Azure tags")
+    for kind in AZURE_NODES:
+        if ("AzureTaggable" in schemas[kind].inherit_from) != (kind in supported):
+            raise ValueError(f"{kind} has incorrect Azure tag support")
+    for kind in ("AzureRegion", "LocationGroup"):
+        if schemas[kind].get_relationship("tags").peer != "BuiltinTag":
+            raise ValueError(f"{kind} must preserve BuiltinTag labels")
+
+
 def verify(client: InfrahubClientSync, branch: str) -> None:
     schemas = client.schema.all(branch=branch, refresh=True)
     verify_azure(schemas)
+    verify_tags(schemas)
     expected = {
         "IpamNamespace": "BuiltinIPNamespace",
         "IpamPrefix": "BuiltinIPPrefix",
@@ -162,7 +203,10 @@ def verify(client: InfrahubClientSync, branch: str) -> None:
     counts = client.execute_graphql(
         query="{ IpamNamespace { count } IpamPrefix { count } "
         "IpamIPAddress { count } IpamVRF { count } IpamRouteTarget { count } "
-        + " ".join(f"{kind} {{ count }}" for kind in (*AZURE_NODES, "LocationGroup"))
+        + " ".join(
+            f"{kind} {{ count }}"
+            for kind in (*AZURE_NODES, "LocationGroup", "AzureTag")
+        )
         + " }",
         branch_name=branch,
     )

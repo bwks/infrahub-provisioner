@@ -41,3 +41,41 @@ management_groups:
   - management_group_id: decommissioned
     display_name: Decommissioned
     parent: fake-corp
+# Status is applied only at creation; GUIDs remain operational data.
+subscriptions:
+  - name: Security
+    management_group: security
+    status: planned
+  - name: Management
+    management_group: management
+    status: planned
+  - name: Connectivity
+    management_group: connectivity
+    status: planned
+  - name: Identity
+    management_group: identity
+    status: planned
+  - name: Landing zone A1
+    management_group: corp
+    status: planned
+  - name: Landing zone A2
+    management_group: corp
+    status: planned
+  - name: Landing zone P1
+    management_group: corp
+    status: planned
+  - name: Landing zone LC1 (Azure Local Clusters)
+    management_group: local
+    status: planned
+  - name: Landing zone LA1 (Applications)
+    management_group: local
+    status: planned
+  - name: Sandbox 1
+    management_group: sandbox
+    status: planned
+  - name: Sandbox 2
+    management_group: sandbox
+    status: planned
+  - name: Decommissioned
+    management_group: decommissioned
+    status: deprecated

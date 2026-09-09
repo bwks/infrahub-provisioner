@@ -1,0 +1,49 @@
+# Azure key/value assignments, independent of Infrahub's BuiltinTag labels.
+version: '1.0'
+generics:
+  - name: Taggable
+    namespace: Azure
+    include_in_menu: false
+    relationships:
+      - name: tags
+        peer: AzureTag
+        cardinality: many
+        kind: Component
+        optional: true
+        max_count: 50
+        identifier: azure_taggable__tags
+nodes:
+  - name: Tag
+    namespace: Azure
+    label: Tags
+    menu_placement: AzureResource
+    display_label: '{{ key__value }}={{ value__value }}'
+    uniqueness_constraints:
+      - [owner, key__value]
+    attributes:
+      - name: key
+        kind: Text
+        parameters:
+          min_length: 1
+          max_length: 512
+          regex: '^[^<>%&\\?/]+$'
+      - name: value
+        kind: Text
+        parameters:
+          max_length: 256
+    relationships:
+      - name: owner
+        peer: AzureTaggable
+        kind: Parent
+        cardinality: one
+        optional: false
+        identifier: azure_taggable__tags
+  - name: Subscription
+    namespace: Azure
+    inherit_from: [AzureTaggable]
+  - name: ResourceGroup
+    namespace: Azure
+    inherit_from: [AzureTaggable]
+  - name: VirtualNetwork
+    namespace: Azure
+    inherit_from: [AzureResource, AzureTaggable]

@@ -196,3 +196,13 @@ def test_cli_invalid_catalog(monkeypatch, tmp_path, client):
     )
     assert result.exit_code == 1
     client.all.assert_not_called()
+
+
+def test_seed_preserves_builtin_location_tags(client, entries):
+    module.seed(client, "validation", entries, True)
+    for node in client.inventory:
+        node.tags = NS(peers=["existing-label"])
+    client.create.reset_mock()
+    assert module.seed(client, "validation", entries, True) == 0
+    assert all(n.tags.peers == ["existing-label"] for n in client.inventory)
+    client.create.assert_not_called()
