@@ -1,0 +1,46 @@
+# Repository-owned replacement of the empty upstream AzureLocation model.
+version: '1.0'
+nodes:
+  - name: Location
+    namespace: Azure
+    state: absent
+  - name: Group
+    namespace: Location
+    label: Location Groups
+    include_in_menu: false
+    inherit_from:
+      - LocationGeneric
+    parent: LocationGeneric
+    children: LocationGeneric
+    display_label: display_name__value
+    attributes:
+      - name: display_name
+        kind: Text
+  - name: Region
+    namespace: Azure
+    label: Regions
+    menu_placement: AzureResource
+    inherit_from:
+      - LocationGeneric
+    parent: LocationGeneric
+    display_label: display_name__value
+    attributes:
+      - name: display_name
+        kind: Text
+  - name: ResourceGroup
+    namespace: Azure
+    relationships:
+      - name: location
+        label: Region
+        peer: AzureRegion
+        cardinality: one
+        kind: Attribute
+generics:
+  - name: Resource
+    namespace: Azure
+    relationships:
+      - name: location
+        label: Region
+        peer: AzureRegion
+        cardinality: one
+        kind: Attribute

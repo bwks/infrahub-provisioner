@@ -295,7 +295,7 @@ revision as the base and VRF schemas. It adds these models:
 | --- | --- |
 | `AzureTenant` | Tenant name/ID and subscriptions |
 | `AzureSubscription` | Subscription name/ID, tenant, and resource groups |
-| `AzureLocation` | Azure region/location name |
+| `AzureLocation` | Upstream region model; replaced locally by `AzureRegion` (see below) |
 | `AzureResourceGroup` | Resource group, subscription, and location |
 | `AzureVirtualNetwork` | VNet, location/resource group, address space, and subnets |
 | `AzureVirtualNetworkSubnet` | Subnet, parent VNet, and IPAM prefixes |
@@ -538,7 +538,7 @@ network subnets. It is also available on the management-group hierarchy view.
 | Active | Provisioned and in use |
 | Reserved | Held for future use |
 | Deprecated | Being retired or no longer recommended |
-| Unmanaged | Azure-managed reference configuration; default for regions (`AzureLocation`) |
+| Unmanaged | Azure-managed reference configuration; default for regions (`AzureRegion`) |
 
 The choices are shared through local YAML definitions, not a global status registry.
 Upstream IPAM dropdowns remain Active, Reserved, and Deprecated. Infrahub normalizes
@@ -566,6 +566,92 @@ Merged with `INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge azure-status`.
 The same schema, hierarchy, and catalog checks passed against `--branch main`;
 the schema diff was empty. Status values and original Azure object IDs were also
 verified on `main`. Local validation: 176 pytest tests and Ruff checks passed.
+
+## Cloud locations and Azure regions
+
+The local `cloud_locations.yml` extension replaces the empty upstream
+`AzureLocation` with `AzureRegion` and adds `LocationGroup`. Both inherit the native
+`LocationGeneric` hierarchy. The same region record appears in the Location tree
+and Azure **Regions** view; no duplicate geographic record is created.
+
+```text
+Cloud
+├── Azure
+│   ├── North America (12 regions)
+│   ├── South America (3 regions)
+│   ├── Europe (19 regions)
+│   ├── Asia Pacific (17 regions)
+│   ├── Middle East (4 regions)
+│   └── Africa (2 regions)
+└── AWS (empty)
+```
+
+`data/cloud_locations.yaml` contains nine groups and 57 current public-cloud
+regions from [Microsoft's region list](https://learn.microsoft.com/en-us/azure/reliability/regions-list),
+retrieved on 2026-09-09. Its source hash records the corresponding raw Markdown in
+MicrosoftDocs/reliability-docs. Restricted-access regions are included; announced
+future regions, sovereign clouds, nonregional values, region pairs, and availability
+zones are excluded. Catalog presence does not imply subscription access or service
+availability. This is a checked-in snapshot; seed runs do not fetch Azure or the web.
+
+Broad groupings are repository navigation choices, recorded explicitly per region.
+US, Canada, and Mexico are North America; Brazil and Chile are South America;
+Australia and New Zealand are included in Asia Pacific; Israel, Qatar, and UAE are
+Middle East. Country groups and AWS regions are not seeded.
+
+Groups use globally unique internal names such as `cloud-azure-europe` and readable
+labels such as **Europe**. Regions use Microsoft's programmatic name (`australiaeast`)
+and readable `display_name` (**Australia East**). Regions default to **Unmanaged**;
+seed reruns preserve status edits, descriptions, tags, and other unmanaged fields.
+
+The API type and object route are now `AzureRegion` and `/objects/AzureRegion`.
+`AzureLocation` is retired. Resource and resource-group relationship fields remain
+`location`, now targeting `AzureRegion` and labeled **Region** in the UI. Vendored
+YAML is unchanged; the local extension uses `state: absent` for the retired model.
+The migration is only valid while the old model is empty: check its count before
+loading into any deployment that still has it, and stop if records exist.
+
+The seed command previews by default; `--apply` creates only missing records and
+`--data PATH` selects a catalog with the agreed nine groups and region entries.
+It reads all Location records with SDK pagination, preflights names, types, labels,
+and parent relationships, then creates parents before children. Conflicts prevent
+all writes. Exit codes are 0 for success and 1 for invalid input, conflicts, or API
+failures. No objects are moved or deleted. Use one writer per branch; partial
+failures require inspection and rerunning, without automatic rollback.
+
+Verified branch workflow:
+
+```sh
+uv run infrahubctl branch create cloud-regions
+uv run python scripts/check_schema.py --branch cloud-regions
+uv run infrahubctl schema load schemas --branch cloud-regions --wait 30
+uv run python scripts/verify_schema.py --branch cloud-regions
+uv run python scripts/seed_cloud_locations.py --branch cloud-regions
+uv run python scripts/seed_cloud_locations.py --branch cloud-regions --apply
+uv run python scripts/seed_cloud_locations.py --branch cloud-regions --apply
+uv run infrahubctl schema load schemas --branch cloud-regions --wait 30
+uv run python scripts/check_schema.py --branch cloud-regions
+uv run python scripts/check_azure_hierarchy.py --branch cloud-regions
+uv run python scripts/seed_azure_hierarchy.py --branch cloud-regions
+uv run python scripts/seed_ipam.py --branch cloud-regions
+```
+
+The rerun created zero records and matched all 66. Schema reload required no
+changes. Native ancestor queries verified all 57 regions have Cloud, Azure, and
+one geographic group as ancestors, with Unmanaged status; AWS has no children.
+Existing Azure and IPAM catalogs matched. Offline validation passed 200 tests and
+Ruff checks, including subtype-field reads through paginated SDK queries.
+
+Integration command:
+
+```sh
+INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge cloud-regions
+```
+
+Deployed to Infrahub `main`. The schema verifier, empty schema diff, all three seed
+previews, and management-group hierarchy validation passed there. Exact region
+ancestors, readable names, Unmanaged statuses, and the empty AWS group were checked;
+the original tenant, management-group, namespace, and prefix IDs were preserved.
 
 ## Source of truth and project boundaries
 

@@ -34,7 +34,7 @@ schema, and repository before making changes. Update this guidance as working
 commands and implementation conventions become established.
 
 The first schema implementation now uses `uv`, SDK `1.22.1`, unmodified upstream
-YAML at the root of `schemas/`, local additive extensions under `schemas/local/`,
+YAML at the root of `schemas/`, local extensions under `schemas/local/`,
 and the built-in `IpamNamespace`. See [README.md](README.md) for current
 deployment status and verified commands, and
 [schema provenance](third_party/schema-library/README.md) for the upstream pin and
@@ -215,7 +215,7 @@ after it was empty. The original default namespace and its designation remain.
 
 ## Local Azure management-group extension
 
-- Keep vendored YAML unchanged. Repository-owned additive extensions belong under
+- Keep vendored YAML unchanged. Repository-owned extensions belong under
   `schemas/local/`; both the checker and loader discover schema YAML recursively.
   Hash verification remains mandatory for every file in the upstream manifest.
 - `AzureManagementGroup` uses `AzureManagementGroupHierarchy` for native hierarchy,
@@ -243,7 +243,7 @@ after it was empty. The original default namespace and its designation remain.
 - `schemas/local/azure_status.yml` supplies status dropdowns on all seven
   Azure node types, plus the resource and management-group hierarchy generics.
   Options are Planned, Active, Reserved, Deprecated, and Unmanaged. Regions
-  (`AzureLocation`) default to Unmanaged because they are Azure-managed reference
+  (`AzureRegion`) default to Unmanaged because they are Azure-managed reference
   configuration; other Azure types default to Planned.
 - These are schema attribute choices, not a global status registry. Upstream IPAM
   status definitions remain unchanged. Preserve the hierarchy generic's metadata
@@ -273,3 +273,23 @@ Azure GUIDs. The original IPAM catalog is unchanged.
   Preserve GUIDs, descriptions, and other unmanaged fields populated in Infrahub.
   Tenant/root GUID assignment is a later manual or synchronization step, not a seed
   action. Schema constraints and CLI hierarchy validation remain separate gates.
+
+
+## Cloud location catalog
+
+- `schemas/local/cloud_locations.yml` replaces empty `AzureLocation` with
+  `AzureRegion` and retargets `location` relationships (UI label Region). Check the
+  old type is empty before schema removal on any deployment; stop if data exists.
+  Keep all upstream YAML unchanged. `/objects/AzureRegion` replaces the old route.
+- `LocationGroup` and `AzureRegion` inherit `LocationGeneric`. Seed Cloud, Azure,
+  AWS, six Azure geographic groups, and 57 public-cloud regions from
+  `data/cloud_locations.yaml`. AWS remains empty. Internal group names are globally
+  unique; display names are readable. Region names retain Azure programmatic IDs.
+- `uv run python scripts/seed_cloud_locations.py --branch <branch>` previews;
+  `--apply` creates missing records, `--data` selects a catalog. Preserve operational
+  status, tags, and descriptions. Preflight conflicts before all writes, use one
+  writer, never move/delete existing objects, and inspect/rerun partial failures.
+- Geographic parent mappings are explicit catalog data, not inferred from names.
+  Include restricted public regions, exclude future/sovereign regions, and refresh
+  the dated Microsoft reference snapshot deliberately. No live Azure discovery,
+  AWS regions, country groups, availability zones, or deployment execution.

@@ -41,7 +41,7 @@ generics:
     attributes:
       - *azure_status
 nodes:
-  - name: Location
+  - name: Region
     namespace: Azure
     attributes:
       - <<: *azure_status

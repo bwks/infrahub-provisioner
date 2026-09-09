@@ -1,0 +1,205 @@
+# Public Azure reference catalog; geographic grouping is repository-owned.
+source:
+  url: https://learn.microsoft.com/en-us/azure/reliability/regions-list
+  retrieved: '2026-09-09'
+  source_sha256: 15c638e48a1f83b49e435753ebead3a2f91aeb767398985af251f8cdba808adc
+groups:
+- name: cloud
+  display_name: Cloud
+  parent: null
+- name: cloud-azure
+  display_name: Azure
+  parent: cloud
+- name: cloud-aws
+  display_name: AWS
+  parent: cloud
+- name: cloud-azure-north-america
+  display_name: North America
+  parent: cloud-azure
+- name: cloud-azure-south-america
+  display_name: South America
+  parent: cloud-azure
+- name: cloud-azure-europe
+  display_name: Europe
+  parent: cloud-azure
+- name: cloud-azure-asia-pacific
+  display_name: Asia Pacific
+  parent: cloud-azure
+- name: cloud-azure-middle-east
+  display_name: Middle East
+  parent: cloud-azure
+- name: cloud-azure-africa
+  display_name: Africa
+  parent: cloud-azure
+regions:
+- name: australiacentral
+  display_name: Australia Central
+  parent: cloud-azure-asia-pacific
+- name: australiacentral2
+  display_name: Australia Central 2
+  parent: cloud-azure-asia-pacific
+- name: australiaeast
+  display_name: Australia East
+  parent: cloud-azure-asia-pacific
+- name: australiasoutheast
+  display_name: Australia Southeast
+  parent: cloud-azure-asia-pacific
+- name: austriaeast
+  display_name: Austria East
+  parent: cloud-azure-europe
+- name: belgiumcentral
+  display_name: Belgium Central
+  parent: cloud-azure-europe
+- name: brazilsouth
+  display_name: Brazil South
+  parent: cloud-azure-south-america
+- name: brazilsoutheast
+  display_name: Brazil Southeast
+  parent: cloud-azure-south-america
+- name: canadacentral
+  display_name: Canada Central
+  parent: cloud-azure-north-america
+- name: canadaeast
+  display_name: Canada East
+  parent: cloud-azure-north-america
+- name: centralindia
+  display_name: Central India
+  parent: cloud-azure-asia-pacific
+- name: centralus
+  display_name: Central US
+  parent: cloud-azure-north-america
+- name: chilecentral
+  display_name: Chile Central
+  parent: cloud-azure-south-america
+- name: denmarkeast
+  display_name: Denmark East
+  parent: cloud-azure-europe
+- name: eastasia
+  display_name: East Asia
+  parent: cloud-azure-asia-pacific
+- name: eastus
+  display_name: East US
+  parent: cloud-azure-north-america
+- name: eastus2
+  display_name: East US 2
+  parent: cloud-azure-north-america
+- name: francecentral
+  display_name: France Central
+  parent: cloud-azure-europe
+- name: francesouth
+  display_name: France South
+  parent: cloud-azure-europe
+- name: germanynorth
+  display_name: Germany North
+  parent: cloud-azure-europe
+- name: germanywestcentral
+  display_name: Germany West Central
+  parent: cloud-azure-europe
+- name: indiasouthcentral
+  display_name: India South Central
+  parent: cloud-azure-asia-pacific
+- name: indonesiacentral
+  display_name: Indonesia Central
+  parent: cloud-azure-asia-pacific
+- name: israelcentral
+  display_name: Israel Central
+  parent: cloud-azure-middle-east
+- name: italynorth
+  display_name: Italy North
+  parent: cloud-azure-europe
+- name: japaneast
+  display_name: Japan East
+  parent: cloud-azure-asia-pacific
+- name: japanwest
+  display_name: Japan West
+  parent: cloud-azure-asia-pacific
+- name: koreacentral
+  display_name: Korea Central
+  parent: cloud-azure-asia-pacific
+- name: koreasouth
+  display_name: Korea South
+  parent: cloud-azure-asia-pacific
+- name: malaysiawest
+  display_name: Malaysia West
+  parent: cloud-azure-asia-pacific
+- name: mexicocentral
+  display_name: Mexico Central
+  parent: cloud-azure-north-america
+- name: newzealandnorth
+  display_name: New Zealand North
+  parent: cloud-azure-asia-pacific
+- name: northcentralus
+  display_name: North Central US
+  parent: cloud-azure-north-america
+- name: northeurope
+  display_name: North Europe
+  parent: cloud-azure-europe
+- name: norwayeast
+  display_name: Norway East
+  parent: cloud-azure-europe
+- name: norwaywest
+  display_name: Norway West
+  parent: cloud-azure-europe
+- name: polandcentral
+  display_name: Poland Central
+  parent: cloud-azure-europe
+- name: qatarcentral
+  display_name: Qatar Central
+  parent: cloud-azure-middle-east
+- name: southafricanorth
+  display_name: South Africa North
+  parent: cloud-azure-africa
+- name: southafricawest
+  display_name: South Africa West
+  parent: cloud-azure-africa
+- name: southcentralus
+  display_name: South Central US
+  parent: cloud-azure-north-america
+- name: southeastasia
+  display_name: Southeast Asia
+  parent: cloud-azure-asia-pacific
+- name: southindia
+  display_name: South India
+  parent: cloud-azure-asia-pacific
+- name: spaincentral
+  display_name: Spain Central
+  parent: cloud-azure-europe
+- name: swedencentral
+  display_name: Sweden Central
+  parent: cloud-azure-europe
+- name: switzerlandnorth
+  display_name: Switzerland North
+  parent: cloud-azure-europe
+- name: switzerlandwest
+  display_name: Switzerland West
+  parent: cloud-azure-europe
+- name: uaecentral
+  display_name: UAE Central
+  parent: cloud-azure-middle-east
+- name: uaenorth
+  display_name: UAE North
+  parent: cloud-azure-middle-east
+- name: uksouth
+  display_name: UK South
+  parent: cloud-azure-europe
+- name: ukwest
+  display_name: UK West
+  parent: cloud-azure-europe
+- name: westcentralus
+  display_name: West Central US
+  parent: cloud-azure-north-america
+- name: westeurope
+  display_name: West Europe
+  parent: cloud-azure-europe
+- name: westindia
+  display_name: West India
+  parent: cloud-azure-asia-pacific
+- name: westus
+  display_name: West US
+  parent: cloud-azure-north-america
+- name: westus2
+  display_name: West US 2
+  parent: cloud-azure-north-america
+- name: westus3
+  display_name: West US 3
+  parent: cloud-azure-north-america

@@ -15,13 +15,18 @@ def schemas():
     definitions = {}
     for path in (
         Path("schemas/azure.yml"),
+        Path("schemas/location.yml"),
         Path("schemas/local/azure_management_groups.yml"),
         Path("schemas/local/azure_status.yml"),
+        Path("schemas/local/cloud_locations.yml"),
     ):
         data = yaml.safe_load(path.read_text())
         for section in ("generics", "nodes"):
             for definition in data.get(section, []):
                 kind = definition["namespace"] + definition["name"]
+                if definition.get("state") == "absent":
+                    definitions.pop(kind, None)
+                    continue
                 if kind in definitions:
                     original = definitions[kind][1]
                     for field in ("attributes", "relationships"):
@@ -34,8 +39,9 @@ def schemas():
                                 **item,
                             }
                         original[field] = list(merged.values())
-                    if "display_label" in definition:
-                        original["display_label"] = definition["display_label"]
+                    for field, value in definition.items():
+                        if field not in ("attributes", "relationships"):
+                            original[field] = value
                 else:
                     definitions[kind] = (section, definition)
     nodes = {}
@@ -43,6 +49,8 @@ def schemas():
         cls = GenericSchemaAPI if section == "generics" else NodeSchemaAPI
         if kind == "AzureManagementGroup":
             definition["hierarchy"] = "AzureManagementGroupHierarchy"
+        if kind in ("AzureRegion", "LocationGroup"):
+            definition["hierarchy"] = "LocationGeneric"
         nodes[kind] = cls(**definition)
     for node in nodes.values():
         node.relationships.extend(node.hierarchical_relationship_schemas)
@@ -241,9 +249,9 @@ def test_azure_status_contract(schemas, field, value):
 
 
 def test_region_status_default_is_unmanaged(schemas):
-    assert schemas["AzureLocation"].get_attribute("status").default_value == "unmanaged"
-    schemas["AzureLocation"].get_attribute("status").default_value = "planned"
-    with pytest.raises(ValueError, match="AzureLocation.status"):
+    assert schemas["AzureRegion"].get_attribute("status").default_value == "unmanaged"
+    schemas["AzureRegion"].get_attribute("status").default_value = "planned"
+    with pytest.raises(ValueError, match="AzureRegion.status"):
         verify_azure(schemas)
 
 
@@ -260,3 +268,77 @@ def test_status_labels_and_colors(schemas):
             c["name"]: (c["label"], c["color"])
             for c in schemas[kind].get_attribute("status").choices
         } == expected
+
+
+@pytest.mark.parametrize("kind", ["AzureRegion", "LocationGroup"])
+@pytest.mark.parametrize(
+    "field,value", [("hierarchy", None), ("display_label", "name__value")]
+)
+def test_cloud_schema_contract(schemas, kind, field, value):
+    setattr(schemas[kind], field, value)
+    with pytest.raises(ValueError, match=kind):
+        verify_azure(schemas)
+
+
+def test_old_location_must_be_absent(schemas):
+    schemas["AzureLocation"] = schemas["AzureRegion"]
+    with pytest.raises(ValueError, match="AzureLocation must be retired"):
+        verify_azure(schemas)
+
+
+def test_cloud_seed_uses_sdk_pagination(schemas, monkeypatch, capsys):
+    from unittest.mock import MagicMock
+    from infrahub_sdk import InfrahubClientSync
+    from scripts.seed_cloud_locations import seed
+
+    client = InfrahubClientSync()
+    client.pagination_size = 1
+    schemas["LocationGeneric"].used_by = ["LocationGroup", "AzureRegion"]
+    monkeypatch.setattr(client.schema, "get", lambda kind, **kwargs: schemas[kind])
+    entries = [
+        {
+            "kind": "LocationGroup",
+            "name": "cloud",
+            "display_name": "Cloud",
+            "parent": None,
+        },
+        {
+            "kind": "LocationGroup",
+            "name": "cloud-azure",
+            "display_name": "Azure",
+            "parent": "cloud",
+        },
+    ]
+    responses = []
+    for index, entry in enumerate(entries):
+        node = {
+            "id": str(index),
+            "__typename": "LocationGroup",
+            "name": {"value": entry["name"]},
+            "display_name": {"value": entry["display_name"]},
+            "parent": {
+                "node": None
+                if index == 0
+                else {"id": "0", "__typename": "LocationGroup"}
+            },
+        }
+        responses.append({"LocationGeneric": {"count": 2, "edges": [{"node": node}]}})
+    responses.append({"LocationGeneric": {"count": 2, "edges": []}})
+    # The generic response deliberately omits subtype-only display_name.
+    concrete_pages = [{"LocationGroup": page["LocationGeneric"]} for page in responses]
+    from copy import deepcopy
+
+    responses = deepcopy(responses)
+    for page in responses:
+        for edge in page["LocationGeneric"]["edges"]:
+            edge["node"].pop("display_name", None)
+    responses.extend(concrete_pages)
+    responses.append({"AzureRegion": {"count": 0, "edges": []}})
+    operation = MagicMock(side_effect=responses)
+    monkeypatch.setattr(client, "execute_graphql", operation)
+    assert seed(client, "validation", entries) == 0
+    assert "missing=0, skipped=2" in capsys.readouterr().out
+    assert "offset: 1" in operation.call_args_list[1].kwargs["query"]
+    assert all(
+        call.kwargs["branch_name"] == "validation" for call in operation.call_args_list
+    )

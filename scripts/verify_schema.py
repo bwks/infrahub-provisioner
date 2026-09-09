@@ -10,7 +10,7 @@ app = typer.Typer(help=__doc__, add_completion=False, pretty_exceptions_enable=F
 
 AZURE_NODES = (
     "AzureManagementGroup",
-    "AzureLocation",
+    "AzureRegion",
     "AzureTenant",
     "AzureSubscription",
     "AzureResourceGroup",
@@ -28,7 +28,7 @@ def verify_azure(schemas) -> None:
             raise ValueError(f"{kind} is missing")
     for kind in (*AZURE_NODES, "AzureResource", "AzureManagementGroupHierarchy"):
         status = schemas[kind].get_attribute_or_none("status")
-        default = "unmanaged" if kind == "AzureLocation" else "planned"
+        default = "unmanaged" if kind == "AzureRegion" else "planned"
         if (
             status is None
             or status.kind != "Dropdown"
@@ -39,6 +39,26 @@ def verify_azure(schemas) -> None:
             raise ValueError(
                 f"{kind}.status must be an Azure lifecycle dropdown defaulting to {default}"
             )
+    if "AzureLocation" in schemas:
+        raise ValueError("AzureLocation must be retired in favor of AzureRegion")
+    for kind in ("AzureRegion", "LocationGroup"):
+        if kind not in schemas:
+            raise ValueError(f"{kind} is missing")
+        node = schemas[kind]
+        if (
+            node.hierarchy != "LocationGeneric"
+            or "LocationGeneric" not in node.inherit_from
+        ):
+            raise ValueError(f"{kind} must use the LocationGeneric hierarchy")
+        if node.display_label != "display_name__value":
+            raise ValueError(f"{kind} must display its readable name")
+        if not node.get_attribute("name").unique:
+            raise ValueError(f"{kind}.name must be unique")
+        if node.get_attribute("display_name").optional:
+            raise ValueError(f"{kind}.display_name must be required")
+    for kind in ("AzureResource", "AzureResourceGroup", "AzureVirtualNetwork"):
+        if schemas[kind].get_relationship("location").label != "Region":
+            raise ValueError(f"{kind}.location must be labeled Region")
     if "AzureResource" not in schemas["AzureVirtualNetwork"].inherit_from:
         raise ValueError("AzureVirtualNetwork must inherit from AzureResource")
     group = schemas["AzureManagementGroup"]
@@ -83,10 +103,10 @@ def verify_azure(schemas) -> None:
         ("AzureSubscription", "tenant", "AzureTenant", "one"),
         ("AzureSubscription", "resourcegroups", "AzureResourceGroup", "many"),
         ("AzureResourceGroup", "subscription", "AzureSubscription", "one"),
-        ("AzureResourceGroup", "location", "AzureLocation", "one"),
-        ("AzureResource", "location", "AzureLocation", "one"),
+        ("AzureResourceGroup", "location", "AzureRegion", "one"),
+        ("AzureResource", "location", "AzureRegion", "one"),
         ("AzureResource", "resourcegroup", "AzureResourceGroup", "one"),
-        ("AzureVirtualNetwork", "location", "AzureLocation", "one"),
+        ("AzureVirtualNetwork", "location", "AzureRegion", "one"),
         ("AzureVirtualNetwork", "resourcegroup", "AzureResourceGroup", "one"),
         ("AzureVirtualNetwork", "address_space", "BuiltinIPPrefix", "many"),
         ("AzureVirtualNetwork", "subnets", "AzureVirtualNetworkSubnet", "many"),
@@ -142,7 +162,7 @@ def verify(client: InfrahubClientSync, branch: str) -> None:
     counts = client.execute_graphql(
         query="{ IpamNamespace { count } IpamPrefix { count } "
         "IpamIPAddress { count } IpamVRF { count } IpamRouteTarget { count } "
-        + " ".join(f"{kind} {{ count }}" for kind in AZURE_NODES)
+        + " ".join(f"{kind} {{ count }}" for kind in (*AZURE_NODES, "LocationGroup"))
         + " }",
         branch_name=branch,
     )

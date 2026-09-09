@@ -28,6 +28,8 @@ SHA-256 values in [manifest.json](manifest.json), and validate on an Infrahub br
 The local integrity test checks all schema files against that manifest. The paths
 are flattened locally; file contents, including upstream comments, are unchanged.
 
-The Azure extension is attributed upstream to Rowan Coleman. Its experimental
-status and all original fields and relationships are preserved. No Azure seed data
-or custom Azure schema additions are included.
+The Azure extension is attributed upstream to Rowan Coleman. Its vendored experimental
+schema remains unchanged. Repository-owned extensions under `schemas/local/`
+add management groups and status, and replace the empty AzureLocation type with
+AzureRegion in the composed schema. Reference catalogs and seed tools are documented
+in the repository README.
