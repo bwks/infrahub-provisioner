@@ -25,9 +25,15 @@ AZURE_NODES = (
     "AzureVirtualNetworkPeering",
     "AzureVirtualWan",
     "AzureVirtualHub",
+    "AzureFirewallPolicy",
     "AzureStorageAccount",
     "AzureVirtualHubRouteTable",
     "AzureVirtualHubConnection",
+    "AzureFirewallRuleCollectionGroup",
+    "AzureFirewallRuleCollection",
+    "AzureFirewallNetworkRule",
+    "AzureFirewallApplicationRule",
+    "AzureFirewallNatRule",
     "AzureBlobContainer",
     "AzureTerraformStateBackend",
     "AzurePrivateDnsZone",
@@ -134,6 +140,7 @@ def verify_azure(schemas) -> None:
             field == "address_space" and relationship.min_count != 1
         ):
             raise ValueError(f"AzureVirtualNetwork.{field} must be required")
+    verify_firewall(schemas)
     verify_virtual_wan(schemas)
     verify_dns(schemas)
     verify_storage(schemas)
@@ -201,6 +208,118 @@ def verify_azure(schemas) -> None:
             or relationship.cardinality != cardinality
         ):
             raise ValueError(f"{kind}.{name} must refer to {cardinality} {peer}")
+
+
+def verify_firewall(schemas):
+    if __package__:
+        from .check_azure_firewall import (
+            KINDS,
+            POLICY,
+            RULES,
+            SCOPES,
+            REFERENCES,
+            MANY,
+            ATTRIBUTES,
+            CHOICES,
+            DEFAULTS,
+            NAME_RE,
+        )
+    else:
+        from check_azure_firewall import (
+            KINDS,
+            POLICY,
+            RULES,
+            SCOPES,
+            REFERENCES,
+            MANY,
+            ATTRIBUTES,
+            CHOICES,
+            DEFAULTS,
+            NAME_RE,
+        )
+    optional = {
+        "dns_servers",
+        "destination_fqdns",
+        "translated_address",
+        "translated_fqdn",
+    }
+    for kind in KINDS:
+        schema = schemas[kind]
+        expected = {"AzureResource", "AzureTaggable"} if kind == POLICY else set()
+        if set(schema.inherit_from) != expected:
+            raise ValueError(f"{kind}: invalid inheritance")
+        if [SCOPES[kind], "name_key__value"] not in schema.uniqueness_constraints:
+            raise ValueError(f"{kind}: missing scoped name uniqueness")
+        name, key = schema.get_attribute("name"), schema.get_attribute("name_key")
+        if (
+            name.optional
+            or name.kind != "Text"
+            or name.min_length != 1
+            or name.max_length != 80
+            or name.regex != NAME_RE
+            or not key.read_only
+            or key.optional
+        ):
+            raise ValueError(f"{kind}: invalid name/name_key contract")
+        if kind != POLICY:
+            field = "position" if kind in RULES else "priority"
+            if [
+                SCOPES[kind],
+                field + "__value",
+            ] not in schema.uniqueness_constraints or schema.order_by != [
+                field + "__value",
+                "name__value",
+            ]:
+                raise ValueError(f"{kind}: invalid {field} uniqueness/order")
+        for field in ATTRIBUTES[kind]:
+            attr = schema.get_attribute(field)
+            expected_kind = (
+                "Dropdown"
+                if (kind, field) in CHOICES
+                else "Number"
+                if field in {"priority", "position", "translated_port"}
+                else "Boolean"
+                if field == "dns_proxy_enabled"
+                else "JSON"
+                if kind == "AzureFirewallApplicationRule" and field == "protocols"
+                else "Text"
+            )
+            if attr.kind != expected_kind:
+                raise ValueError(f"{kind}.{field}: invalid attribute kind")
+            expected_optional = field in optional or (
+                kind == "AzureFirewallNetworkRule" and field == "destination_addresses"
+            )
+            # Server normalizes attributes with defaults to optional.
+            if (kind, field) not in DEFAULTS and attr.optional != expected_optional:
+                raise ValueError(f"{kind}.{field}: invalid optionality")
+        for field, peer in REFERENCES[kind].items():
+            rel = schema.get_relationship(field)
+            if (
+                rel.peer != peer
+                or rel.cardinality != "one"
+                or rel.optional
+                or (field == SCOPES[kind] and rel.kind != "Parent")
+            ):
+                raise ValueError(f"{kind}.{field}: invalid parent/reference")
+        for field, peer in MANY.get(kind, {}).items():
+            rel = schema.get_relationship(field)
+            other = schemas[peer].get_relationship(SCOPES[peer])
+            if (
+                rel.peer != peer
+                or rel.cardinality != "many"
+                or rel.kind != "Component"
+                or not rel.optional
+                or rel.identifier != other.identifier
+            ):
+                raise ValueError(f"{kind}.{field}: invalid child relationship")
+    for (kind, field), choices in CHOICES.items():
+        if {c["name"] for c in schemas[kind].get_attribute(field).choices or []} != set(
+            choices
+        ):
+            raise ValueError(f"{kind}.{field}: invalid choices")
+    for (kind, field), default in DEFAULTS.items():
+        if schemas[kind].get_attribute(field).default_value != default:
+            raise ValueError(f"{kind}.{field}: invalid default")
 
 
 def verify_virtual_wan(schemas):
@@ -909,6 +1028,7 @@ def verify_tags(schemas) -> None:
         "AzureRouteTable",
         "AzureVirtualWan",
         "AzureVirtualHub",
+        "AzureFirewallPolicy",
         "AzureStorageAccount",
         "AzurePrivateDnsZone",
         "AzureDnsPrivateResolver",

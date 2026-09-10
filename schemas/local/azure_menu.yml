@@ -94,6 +94,24 @@ nodes:
 - name: VirtualHubConnection
   namespace: Azure
   include_in_menu: false
+- name: FirewallPolicy
+  namespace: Azure
+  include_in_menu: false
+- name: FirewallRuleCollectionGroup
+  namespace: Azure
+  include_in_menu: false
+- name: FirewallRuleCollection
+  namespace: Azure
+  include_in_menu: false
+- name: FirewallNetworkRule
+  namespace: Azure
+  include_in_menu: false
+- name: FirewallApplicationRule
+  namespace: Azure
+  include_in_menu: false
+- name: FirewallNatRule
+  namespace: Azure
+  include_in_menu: false
 generics:
 - name: Resource
   namespace: Azure

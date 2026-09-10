@@ -1717,3 +1717,108 @@ and IPAM catalog preview passed. All 131 existing objects were preserved exactly
 (IDs, attributes, relationships), including the existing private DNS zone and
 26 prefixes. All four Virtual WAN inventories remain empty. No Azure resources
 or infrastructure seed records were created.
+
+## Azure Firewall Policies
+
+`schemas/local/firewall_policy.yml` models standalone Standard Firewall Policies
+and the hierarchy **Policy → Rule Collection Groups → Rule Collections → Rules**.
+**Azure → Networking → Firewall Policies** opens policies; parent relationships
+expose their groups, collections, and separate network/application/DNAT rule forms.
+This step creates no policy, rule, firewall instance, default group, or IPAM data.
+
+Policies inherit resource-group ownership, region, Azure tags, descriptions, and
+shared Planned status. Children have their own description/status but derive
+ownership from the parent; they have no region, resource-group, or Azure tags.
+Names use the existing 1–80-character network-name convention and computed
+lowercase owner-scoped uniqueness. Azure GUIDs are not prerequisites. NSG rules
+remain separate: they have different scope, processing, and protocol semantics.
+
+| Object | Configuration |
+| --- | --- |
+| Firewall Policy | Required resource group and region; Standard SKU; threat intelligence Off/Alert/Deny (default Alert); DNS proxy (default false); optional custom DNS servers |
+| Rule Collection Group | Required policy and priority 100–65000, unique within the policy |
+| Rule Collection | Required group, priority 100–65000 unique within the group, Network/Application/DNAT category, and action |
+| Network Rule | Sources, destination addresses/service tags and/or exact FQDNs, TCP/UDP/ICMP/Any protocols, destination ports |
+| Application Rule | Sources, target FQDN patterns, HTTP/HTTPS protocol-port pairs |
+| DNAT Rule | Sources, firewall destination addresses/ports, TCP/UDP protocols, translated address or FQDN, translated port |
+
+Network/application collections choose Allow or Deny; DNAT collections use DNAT.
+A collection contains only its matching rule type. Rules have a required positive
+`position`, unique within their collection, and are displayed in that order.
+Position represents array order for a future consumer, not an Azure rule priority.
+Group/collection priorities and names are parent-scoped; rule names and positions
+are checked across all three rule types within a collection. Empty policies and
+groups are valid; collections must have at least one correctly typed rule to
+pass complete validation. No rule-type precedence or effective traffic simulation
+is inferred from list ordering. See [Microsoft's rule hierarchy](https://learn.microsoft.com/en-us/azure/firewall/policy-rule-sets).
+
+Simple lists use comma-separated Text, trim separator whitespace, and reject
+empty/duplicate entries. `*` must stand alone. Address expressions accept IPv4
+hosts, canonical CIDRs, and ordered address ranges; network destinations also
+accept service-tag identifiers. Source service tags and reusable IP Groups are
+not included. DNAT destinations are host IPv4 addresses or `*`; the future
+firewall-instance model must establish which addresses belong to the firewall.
+These strings describe traffic matches and neither allocate IPAM space nor
+require existing prefix/address objects. IPv6/dual-stack preview is deferred.
+
+Network ports accept individual ports or ordered ranges from 1–65535, or `*`.
+`Any` must be the only network protocol selection; ICMP requires wildcard ports.
+Network FQDNs are exact hostnames without wildcards, URLs, or trailing dots,
+require TCP/UDP, and require policy DNS proxy enabled. Custom `dns_servers` is
+an optional comma-separated IPv4 host list; null/empty means Azure-provided DNS.
+No DNS queries, DNS-resolver links, or downstream VNet DNS changes are performed.
+See [network FQDN filtering](https://learn.microsoft.com/en-us/azure/firewall/fqdn-filtering-network-rules).
+
+Application `protocols` uses a nonempty JSON list, for example:
+
+```json
+[{"protocol_type": "Http", "port": 80}, {"protocol_type": "Https", "port": 443}]
+```
+
+Each item requires exactly `protocol_type` and integer `port`; duplicate pairs
+are invalid. This version follows the published Firewall Policy ARM contract's
+1–64000 application-port subset, while network ports retain 1–65535. Target
+FQDNs allow a leading wildcard (`*.example.com` or `*example.com`), exact names,
+or `*` alone; they do not accept URLs. MSSQL and FQDN-tag catalogs are deferred.
+See the [ARM rule contract](https://learn.microsoft.com/en-us/azure/templates/microsoft.network/firewallpolicies/rulecollectiongroups)
+and [FQDN wildcard semantics](https://learn.microsoft.com/en-us/azure/firewall/firewall-faq).
+
+DNAT requires exactly one `translated_address` (IPv4 host) or `translated_fqdn`
+(exact hostname), plus a single integer `translated_port`. Explicit destination
+ports/ranges and translated ports are limited to 1–63999 according to Microsoft's
+[current NAT limitation](https://learn.microsoft.com/en-us/troubleshoot/azure/firewall/firewall-known-issues).
+Wildcard destination ports remain supported. No target reachability or public-IP
+ownership is asserted without a firewall-instance model.
+
+```sh
+uv run python scripts/check_azure_firewall.py --branch <branch>
+```
+
+This read-only gate pages all objects and nested child relationships, cross-checks
+parent/child inventories, and reports findings with affected identifiers. It returns
+0 for valid/empty inventory and 1 for invalid data/read failures. Run alongside
+schema, network, Virtual WAN, DNS, tag, and storage checks. These semantic checks
+are CLI gates, not automatic enforcement on UI/API writes. Service-tag syntax is
+validated without live catalog discovery. The command does not calculate effective
+policy, simulate traffic, synchronize Azure, or prove deployment readiness.
+
+### Follow-up: Premium settings
+
+Return to **TLS inspection and certificate integration, IDPS, URL filtering, and
+web categories** in a separate Premium modeling step. This is explicit follow-up
+work, not implemented settings or merely unused fields.
+
+Also deferred: parent-policy inheritance and effective-setting resolution, IP
+Groups, firewall instances/policy attachment, threat-intelligence allowlists,
+custom SNAT settings, FQDN-tag catalogs, MSSQL application rules, IPv6 preview,
+Azure deployment/export, and seed data. Virtual WAN static routes remain deferred
+in both hub route tables and connection-level appliance routing.
+
+Firewall Policy rollout verified on `azure-firewall-policy` and `main` on
+2026-09-10: 1,037 offline tests, Ruff, and vendored hashes passed. Branch schema
+and menu reloads were unchanged, including all 29 Azure menu identities. Main
+schema verification, empty diff, unchanged reload, Firewall Policy/network/Virtual
+WAN/DNS/tag/storage gates, and IPAM catalog preview passed. All 131 existing object
+IDs, attributes, and relationships were preserved, including the private DNS zone
+and 26 prefixes. All six new inventories remain empty; no infrastructure data
+or Azure resources were created.

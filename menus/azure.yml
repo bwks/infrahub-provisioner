@@ -87,6 +87,11 @@ spec:
             label: Hub Connections
             kind: AzureVirtualHubConnection
             icon: mdi:routes
+          - namespace: Azuremenu
+            name: FirewallPolicies
+            label: Firewall Policies
+            kind: AzureFirewallPolicy
+            icon: mdi:shield-check-outline
       - namespace: Azuremenu
         name: DNS
         label: DNS

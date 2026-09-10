@@ -486,8 +486,8 @@ requires an actual Boolean value for all eight settings and rejects null values.
 
 ## Azure navigation
 
-- `menus/azure.yml` owns 28 CoreMenuItem records under stable namespace `Azuremenu`:
-  Azure root, Organization/Networking/DNS/Storage/Reference groups, and 22 links. Use the SDK
+- `menus/azure.yml` owns 29 CoreMenuItem records under stable namespace `Azuremenu`:
+  Azure root, Organization/Networking/DNS/Storage/Reference groups, and 23 links. Use the SDK
   menu loader with an explicit branch; it upserts existing identities. Removing
   YAML entries does not delete existing menu objects automatically.
 - `schemas/local/azure_menu.yml` sets include_in_menu false for Azure models and
@@ -620,3 +620,45 @@ requires an actual Boolean value for all eight settings and rejects null values.
   since the previous rollout. Use a fresh pre-change snapshot rather than assuming
   historical zero counts. WAN/network/DNS/tag/storage gates and IPAM preview passed;
   all four new inventories remain empty. No infrastructure data was seeded.
+
+## Standalone Azure Firewall Policies
+
+- `schemas/local/firewall_policy.yml` adds AzureFirewallPolicy,
+  AzureFirewallRuleCollectionGroup, AzureFirewallRuleCollection, and separate
+  AzureFirewallNetworkRule/ApplicationRule/NatRule types. Only the policy inherits
+  AzureResource/AzureTaggable. Children derive ownership from required parents;
+  all six types use shared Planned status and optional descriptions. Seed nothing.
+- Standard policies only, default threat intelligence Alert, DNS proxy false, and
+  optional IPv4 DNS server list (empty means Azure-provided DNS). No inheritance.
+- Use owner-scoped case-insensitive names, group/collection priorities 100–65000,
+  and positive per-collection rule position for stable order. Position is not an
+  Azure priority. Network/application collections Allow/Deny; NAT collections DNAT.
+  Check cross-rule-type names/positions and category consistency in the CLI.
+- Address/port/protocol/FQDN lists are comma-separated Text; application protocols
+  are JSON [{"protocol_type":"Https","port":443}]. Direct IPv4 expressions do
+  not allocate or require IPAM objects. No source service tags or IP Groups;
+  network destination tags are syntax-only. Preserve existing NSG models.
+- Network FQDNs require TCP/UDP and DNS proxy; no wildcard. Application FQDNs
+  support leading wildcards; URLs/MSSQL/FQDN tags are deferred. Network ports use
+  1–65535; application ports use the published ARM contract subset 1–64000.
+  DNAT explicit destination/translated ports use 1–63999 per Microsoft's known
+  limitation, with exactly one translated IPv4 address or exact FQDN.
+- `uv run python scripts/check_azure_firewall.py --branch <branch>` is a paginated
+  read-only gate, including nested children and consistency against parent refs.
+  Exit 0 valid/empty, 1 invalid/read failure. Empty policies/groups are allowed;
+  complete collections require matching rules. Semantic checks are CLI-only,
+  not UI/API enforcement, reachability tests, or effective-traffic simulation.
+- Add Firewall Policies under Azure Networking; browse children through parents.
+  Keep the stable menu namespace and other routes. Take a fresh data snapshot,
+  validate a branch and unchanged reloads, then load the same files on main with
+  sequential live checks. Preserve operational data and IPAM; keep tests offline.
+- Explicit follow-up: Premium TLS inspection/certificates, IDPS, URL filtering,
+  and web categories. Also defer policy inheritance, IP Groups, firewall instances
+  and attachment, threat-intelligence allowlists, custom SNAT, FQDN-tag catalogs,
+  MSSQL, dual-stack preview, deployment/export, and seeds. Virtual WAN static
+  routes remain deferred; do not imply policies attach to hubs or subnets yet.
+- Firewall Policy rollout verified on azure-firewall-policy and main on
+  2026-09-10: 1,037 offline tests, Ruff, upstream hashes, schema/menu verification,
+  unchanged branch reloads, and unchanged main schema reload passed. All 131
+  existing objects and 26 prefixes were preserved; all six new inventories remain
+  empty. Firewall/network/Virtual WAN/DNS/tag/storage gates and IPAM preview passed.

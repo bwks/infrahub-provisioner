@@ -23,6 +23,7 @@ def schemas():
         Path("schemas/local/network_policy.yml"),
         Path("schemas/local/resource_tags.yml"),
         Path("schemas/local/storage.yml"),
+        Path("schemas/local/firewall_policy.yml"),
         Path("schemas/local/virtual_wan.yml"),
         Path("schemas/local/dns.yml"),
         Path("schemas/local/subnet_delegation.yml"),
@@ -971,10 +972,86 @@ def test_virtual_wan_menu():
         for g in data["spec"]["data"][0]["children"]["data"]
         if g["name"] == "Networking"
     )
-    assert [n["kind"] for n in networking["children"]["data"]][-4:] == list(KINDS)
+    assert [
+        n["kind"] for n in networking["children"]["data"] if n["kind"] in KINDS
+    ] == list(KINDS)
     suppression = yaml.safe_load(Path("schemas/local/azure_menu.yml").read_text())
     assert set(KINDS) <= {
         n["namespace"] + n["name"]
         for n in suppression["nodes"]
+        if not n["include_in_menu"]
+    }
+
+
+@pytest.mark.parametrize(
+    "kind,field",
+    [
+        ("AzureFirewallPolicy", "resourcegroup"),
+        ("AzureFirewallRuleCollectionGroup", "policy"),
+        ("AzureFirewallRuleCollection", "collection_group"),
+        ("AzureFirewallNetworkRule", "collection"),
+    ],
+)
+def test_firewall_required_relationships(schemas, kind, field):
+    from scripts.verify_schema import verify_firewall
+
+    schemas[kind].get_relationship(field).optional = True
+    with pytest.raises(ValueError, match=field):
+        verify_firewall(schemas)
+
+
+@pytest.mark.parametrize(
+    "change", ["scope", "order", "choices", "default", "tags", "children"]
+)
+def test_firewall_contract(schemas, change):
+    from scripts.verify_schema import verify_firewall
+    from scripts.check_azure_firewall import POLICY, GROUP, COLLECTION
+
+    if change == "scope":
+        schemas[GROUP].uniqueness_constraints = []
+    elif change == "order":
+        schemas[GROUP].order_by = ["name__value"]
+    elif change == "choices":
+        schemas[COLLECTION].get_attribute("action").choices = []
+    elif change == "default":
+        schemas[POLICY].get_attribute("sku").default_value = "Premium"
+    elif change == "tags":
+        schemas[POLICY].inherit_from = ["AzureResource"]
+    else:
+        schemas[POLICY].get_relationship("collection_groups").identifier = "wrong"
+    with pytest.raises(ValueError):
+        verify_firewall(schemas)
+
+
+def test_firewall_menu_and_schema_parameters():
+    from scripts.check_azure_firewall import KINDS
+
+    data = yaml.safe_load(Path("schemas/local/firewall_policy.yml").read_text())
+    for node in data["nodes"]:
+        for a in node["attributes"]:
+            if a["name"] in ("priority", "position", "translated_port"):
+                expected = {
+                    "priority": {"min_value": 100, "max_value": 65000},
+                    "position": {"min_value": 1},
+                    "translated_port": {"min_value": 1, "max_value": 63999},
+                }[a["name"]]
+                assert a["parameters"] == expected
+        key = next(a for a in node["attributes"] if a["name"] == "name_key")
+        assert (
+            key["computed_attribute"]["jinja2_template"] == "{{ name__value | lower }}"
+        )
+    menu = yaml.safe_load(Path("menus/azure.yml").read_text())
+    network = next(
+        g
+        for g in menu["spec"]["data"][0]["children"]["data"]
+        if g["name"] == "Networking"
+    )
+    assert [n["kind"] for n in network["children"]["data"]].count(
+        "AzureFirewallPolicy"
+    ) == 1
+    suppressed = yaml.safe_load(Path("schemas/local/azure_menu.yml").read_text())
+    assert set(KINDS) <= {
+        n["namespace"] + n["name"]
+        for n in suppressed["nodes"]
         if not n["include_in_menu"]
     }

@@ -1,0 +1,585 @@
+# Standalone Standard Firewall Policy intent; no firewall instances or seed data.
+version: '1.0'
+nodes:
+- namespace: Azure
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    description: Computed lowercase name used for owner-scoped uniqueness.
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: sku
+    kind: Dropdown
+    optional: false
+    choices:
+    - name: Standard
+      label: Standard
+    default_value: Standard
+  - name: threat_intelligence_mode
+    kind: Dropdown
+    optional: false
+    choices:
+    - name: 'Off'
+      label: 'Off'
+    - name: Alert
+      label: Alert
+    - name: Deny
+      label: Deny
+    default_value: Alert
+  - name: dns_proxy_enabled
+    kind: Boolean
+    optional: false
+    default_value: false
+  - name: dns_servers
+    kind: Text
+    optional: true
+    description: Optional comma-separated DNS server IPv4 addresses. Empty uses Azure-provided
+      DNS.
+  name: FirewallPolicy
+  label: Firewall Policies
+  relationships:
+  - name: location
+    label: Region
+    peer: AzureRegion
+    kind: Attribute
+    cardinality: one
+    optional: false
+  - name: collection_groups
+    peer: AzureFirewallRuleCollectionGroup
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_firewall__firewallrulecollectiongroup
+  uniqueness_constraints:
+  - - resourcegroup
+    - name_key__value
+  inherit_from:
+  - AzureResource
+  - AzureTaggable
+- namespace: Azure
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    description: Computed lowercase name used for owner-scoped uniqueness.
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: priority
+    kind: Number
+    optional: false
+    parameters:
+      min_value: 100
+      max_value: 65000
+  name: FirewallRuleCollectionGroup
+  label: Firewall Rule Collection Groups
+  relationships:
+  - name: policy
+    peer: AzureFirewallPolicy
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_firewall__firewallrulecollectiongroup
+  - name: collections
+    peer: AzureFirewallRuleCollection
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_firewall__firewallrulecollection
+  uniqueness_constraints:
+  - - policy
+    - name_key__value
+  - - policy
+    - priority__value
+  order_by:
+  - priority__value
+  - name__value
+- namespace: Azure
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    description: Computed lowercase name used for owner-scoped uniqueness.
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: priority
+    kind: Number
+    optional: false
+    parameters:
+      min_value: 100
+      max_value: 65000
+  - name: category
+    kind: Dropdown
+    optional: false
+    choices:
+    - name: Network
+      label: Network
+    - name: Application
+      label: Application
+    - name: DNAT
+      label: DNAT
+  - name: action
+    kind: Dropdown
+    optional: false
+    choices:
+    - name: Allow
+      label: Allow
+    - name: Deny
+      label: Deny
+    - name: DNAT
+      label: DNAT
+  name: FirewallRuleCollection
+  label: Firewall Rule Collections
+  relationships:
+  - name: collection_group
+    peer: AzureFirewallRuleCollectionGroup
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_firewall__firewallrulecollection
+  - name: network_rules
+    peer: AzureFirewallNetworkRule
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_firewall__firewallnetworkrule
+  - name: application_rules
+    peer: AzureFirewallApplicationRule
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_firewall__firewallapplicationrule
+  - name: nat_rules
+    peer: AzureFirewallNatRule
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_firewall__firewallnatrule
+  uniqueness_constraints:
+  - - collection_group
+    - name_key__value
+  - - collection_group
+    - priority__value
+  order_by:
+  - priority__value
+  - name__value
+- namespace: Azure
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    description: Computed lowercase name used for owner-scoped uniqueness.
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: position
+    kind: Number
+    optional: false
+    parameters:
+      min_value: 1
+    description: Stable rule order within this collection; not an Azure priority.
+  - name: source_addresses
+    kind: Text
+    optional: false
+    description: Comma-separated IPv4 addresses, canonical CIDRs, ranges, or * alone.
+      No IP Groups or allocations.
+  - name: destination_addresses
+    kind: Text
+    optional: true
+    description: Comma-separated IPv4 addresses, CIDRs, ranges or service tags; *
+      must stand alone.
+  - name: destination_fqdns
+    kind: Text
+    optional: true
+    description: Comma-separated exact host FQDNs; requires policy DNS proxy. No wildcard.
+  - name: protocols
+    kind: Text
+    optional: false
+    description: Comma-separated TCP, UDP, ICMP, or Any alone.
+  - name: destination_ports
+    kind: Text
+    optional: false
+    description: Comma-separated ports/ranges, or * alone. ICMP requires *.
+  name: FirewallNetworkRule
+  label: Firewall Network Rules
+  relationships:
+  - name: collection
+    peer: AzureFirewallRuleCollection
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_firewall__firewallnetworkrule
+  uniqueness_constraints:
+  - - collection
+    - name_key__value
+  - - collection
+    - position__value
+  order_by:
+  - position__value
+  - name__value
+- namespace: Azure
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    description: Computed lowercase name used for owner-scoped uniqueness.
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: position
+    kind: Number
+    optional: false
+    parameters:
+      min_value: 1
+    description: Stable rule order within this collection; not an Azure priority.
+  - name: source_addresses
+    kind: Text
+    optional: false
+    description: Comma-separated IPv4 addresses, canonical CIDRs, ranges, or * alone.
+      No IP Groups or allocations.
+  - name: target_fqdns
+    kind: Text
+    optional: false
+    description: Comma-separated FQDN patterns. Supports a leading wildcard, or *
+      alone; no URLs.
+  - name: protocols
+    kind: JSON
+    optional: false
+    description: "Nonempty list of objects, e.g. [{\"protocol_type\":\"Https\",\"\
+      port\":443}]. Http/Https only; ports 1\u201364000."
+  name: FirewallApplicationRule
+  label: Firewall Application Rules
+  relationships:
+  - name: collection
+    peer: AzureFirewallRuleCollection
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_firewall__firewallapplicationrule
+  uniqueness_constraints:
+  - - collection
+    - name_key__value
+  - - collection
+    - position__value
+  order_by:
+  - position__value
+  - name__value
+- namespace: Azure
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    description: Computed lowercase name used for owner-scoped uniqueness.
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: position
+    kind: Number
+    optional: false
+    parameters:
+      min_value: 1
+    description: Stable rule order within this collection; not an Azure priority.
+  - name: source_addresses
+    kind: Text
+    optional: false
+    description: Comma-separated IPv4 addresses, canonical CIDRs, ranges, or * alone.
+      No IP Groups or allocations.
+  - name: destination_addresses
+    kind: Text
+    optional: false
+    description: Comma-separated firewall IPv4 addresses, or * alone. No instance
+      discovery.
+  - name: destination_ports
+    kind: Text
+    optional: false
+    description: Comma-separated destination ports/ranges, or * alone.
+  - name: protocols
+    kind: Text
+    optional: false
+    description: Comma-separated TCP and/or UDP.
+  - name: translated_address
+    kind: Text
+    optional: true
+    description: Exactly one translated IPv4 address or translated_fqdn is required.
+  - name: translated_fqdn
+    kind: Text
+    optional: true
+    description: Exact backend FQDN; mutually exclusive with translated_address.
+  - name: translated_port
+    kind: Number
+    optional: false
+    parameters:
+      min_value: 1
+      max_value: 63999
+  name: FirewallNatRule
+  label: Firewall DNAT Rules
+  relationships:
+  - name: collection
+    peer: AzureFirewallRuleCollection
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_firewall__firewallnatrule
+  uniqueness_constraints:
+  - - collection
+    - name_key__value
+  - - collection
+    - position__value
+  order_by:
+  - position__value
+  - name__value
