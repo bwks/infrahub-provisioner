@@ -324,3 +324,47 @@ The fake-corp catalog is deployed to Infrahub `main` after validation and merge 
   Schema exact-key constraints and the CLI case-insensitive gate are distinct.
 - No live tag values are seeded. Preserve operational assignments on all seed
   reruns. Policy inheritance, Azure synchronization, and execution remain deferred.
+
+
+## Resource-group seed
+
+- `data/azure_resource_groups.yaml` owns the requested `rg-conn-prd-network` in
+  fake-corp / Connectivity, located in Australia East, initially Planned, for
+  network resources. It creates no tags, dependent objects, or actual Azure resources.
+- `uv run python scripts/seed_azure_resource_groups.py --branch <branch>` previews;
+  add `--apply` to create missing groups, or `--data` for a custom catalog.
+- Resolve existing tenants, subscriptions, and regions uniquely. Match group names
+  case-insensitively within the selected subscription. Preflight all conflicts;
+  never overwrite names/regions, move groups, or delete objects. Preserve operational
+  status and tags on reruns. After partial failures, inspect and rerun.
+
+
+## Resource-group uniqueness
+
+- `AzureResourceGroup` uses `[subscription, name_key__value]` uniqueness. The
+  required read-only Jinja2 `name_key` computes lowercase from `name`; preserve
+  displayed names and exclude region from identity. Do not make names globally unique.
+- For preexisting groups without name_key, use the staged migration documented in
+  README: optional computed field, equivalent template update to trigger backfill,
+  verify all values/no scoped duplicates, then required field. Final committed
+  schema is required; do not bypass migration checks or manually maintain the key.
+
+
+## Virtual-network foundation
+
+- `schemas/local/virtual_networks.yml` extends AzureVirtualNetwork only. Preserve
+  AzureResource and AzureTaggable inheritance, existing API names, and subnet links.
+- Require resourcegroup, location (Region), and address_space with min_count 1,
+  including Planned records. Region is independent of the resource group's region;
+  subscription is reached through resourcegroup. Keep BuiltinIPPrefix relationships
+  for IPv4/IPv6 and namespace isolation, without new CIDR fields or seed data.
+- Enforce Azure VNet naming rules and resource-group-scoped case-insensitive
+  uniqueness through a required read-only computed name_key. Use attribute
+  parameters for length/regex constraints; the pinned SDK exposes legacy fields
+  when reading the server schema.
+- Before loading on another deployment, inspect existing VNets for required-field
+  and uniqueness compliance. Migrate populated deployments deliberately; never
+  invent address space or bypass required relationships to load a schema.
+- Schema constraints do not validate address overlap, subnet containment, or Azure
+  deployment readiness. DNS, peering, subnet enhancements, identifiers, allocation,
+  seeding, and deployment remain deferred. Keep scenario fixtures offline.

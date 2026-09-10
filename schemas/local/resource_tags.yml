@@ -43,7 +43,20 @@ nodes:
     inherit_from: [AzureTaggable]
   - name: ResourceGroup
     namespace: Azure
+    label: Resource Groups
     inherit_from: [AzureTaggable]
+    uniqueness_constraints:
+      - [subscription, name_key__value]
+    attributes:
+      - name: name_key
+        label: Normalized Name
+        description: Computed lowercase name used for subscription-scoped uniqueness.
+        kind: Text
+        read_only: true
+        optional: false
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: '{{ (name__value | lower) }}'
   - name: VirtualNetwork
     namespace: Azure
     inherit_from: [AzureResource, AzureTaggable]

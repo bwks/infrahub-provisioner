@@ -59,8 +59,58 @@ def verify_azure(schemas) -> None:
     for kind in ("AzureResource", "AzureResourceGroup", "AzureVirtualNetwork"):
         if schemas[kind].get_relationship("location").label != "Region":
             raise ValueError(f"{kind}.location must be labeled Region")
+    resource_group = schemas["AzureResourceGroup"]
+    if not any(
+        set(c) == {"subscription", "name_key__value"}
+        for c in resource_group.uniqueness_constraints or []
+    ):
+        raise ValueError(
+            "AzureResourceGroup uniqueness must use subscription and normalized name"
+        )
+    normalized = resource_group.get_attribute_or_none("name_key")
+    if (
+        normalized is None
+        or normalized.kind != "Text"
+        or not normalized.read_only
+        or normalized.optional
+        or normalized.unique
+    ):
+        raise ValueError(
+            "AzureResourceGroup.name_key must be required read-only Text, scoped rather than globally unique"
+        )
     if "AzureResource" not in schemas["AzureVirtualNetwork"].inherit_from:
         raise ValueError("AzureVirtualNetwork must inherit from AzureResource")
+    vnet = schemas["AzureVirtualNetwork"]
+    if vnet.uniqueness_constraints != [["resourcegroup", "name_key__value"]]:
+        raise ValueError(
+            "AzureVirtualNetwork uniqueness must use resourcegroup and normalized name"
+        )
+    key = vnet.get_attribute_or_none("name_key")
+    if (
+        key is None
+        or key.kind != "Text"
+        or key.optional
+        or not key.read_only
+        or key.unique
+    ):
+        raise ValueError(
+            "AzureVirtualNetwork.name_key must be required read-only scoped Text"
+        )
+    name = vnet.get_attribute("name")
+    if (
+        name.optional
+        or name.unique
+        or name.min_length != 2
+        or name.max_length != 64
+        or name.regex != r"^[A-Za-z0-9][A-Za-z0-9_.-]*[A-Za-z0-9_]\Z"
+    ):
+        raise ValueError("AzureVirtualNetwork.name must enforce Azure naming rules")
+    for field in ("resourcegroup", "location", "address_space"):
+        relationship = vnet.get_relationship(field)
+        if relationship.optional or (
+            field == "address_space" and relationship.min_count != 1
+        ):
+            raise ValueError(f"AzureVirtualNetwork.{field} must be required")
     group = schemas["AzureManagementGroup"]
     if (
         group.hierarchy != "AzureManagementGroupHierarchy"

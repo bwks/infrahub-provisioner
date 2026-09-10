@@ -11,8 +11,8 @@ environment, a local Azure management-group extension, an SDK-based schema check
 read-only verification of the deployed models and Azure hierarchy, and a
 create-only seed workflows for Azure intent and cloud locations. Infrahub `main`
 contains the `fake-corp` tenant, 13 management groups, 12 subscriptions with Azure
-GUIDs pending, and the 57-region reference catalog. Other Azure resource inventories
-are empty.
+GUIDs pending, the 57-region reference catalog, and the planned Connectivity
+resource group `rg-conn-prd-network`. Other Azure resource inventories are empty.
 
 The upstream base and VRF schemas are deployed on the lab’s `main` branch after
 validation and merge of `upstream-ipam`. No sample or operational objects were loaded during schema setup.
@@ -782,6 +782,127 @@ namespace, prefix, and built-in tag IDs were preserved; AzureTag remains empty.
 ```sh
 uv run python scripts/check_azure_tags.py --branch main
 ```
+
+## Resource-group seed tooling
+
+Resource-group uniqueness is enforced in the schema using
+`[subscription, name_key__value]`. `name_key` is a required, read-only computed Text
+attribute containing the lowercase `name`. Names differing only by case therefore
+share an identity within a subscription; region is not part of the constraint.
+Different subscriptions can reuse a name. The original name and display label are
+preserved. Normalized Name is a computed field, not a value operators must maintain.
+
+The existing populated instance required a staged migration on
+`resource-group-uniqueness`: add the computed field temporarily optional, then
+change its Jinja expression from `{{ name__value | lower }}` to the equivalent
+`{{ (name__value | lower) }}` to trigger recomputation for existing records. Once
+all existing names are populated and checked for scoped collisions, make the field
+required and reload. The committed schema is the final required form. Applying
+that form directly to an older populated schema can fail the mandatory-field check;
+do not bypass the check or populate a manually editable normalization field.
+
+Validated the final required schema and unchanged reload on
+`resource-group-uniqueness`, then merged it with
+`INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge resource-group-uniqueness`.
+On `main`, schema verification and an empty schema diff passed; the existing group
+retained its ID and subscription and had the expected computed name. Resource-group
+and IPAM previews reported no missing objects or conflicts. Offline tests cover
+normalization and the scoped schema contract; no live duplicate test objects were
+created. All 272 pytest tests and Ruff checks passed.
+
+The resource-group model is labeled **Resource Groups** in the UI through a local
+schema override. Its API type and route remain `AzureResourceGroup` and
+`/objects/AzureResourceGroup`; each record still displays its own name.
+
+`scripts/seed_azure_resource_groups.py` adds a create-only workflow for agreed
+resource groups. Its YAML input has a `resource_groups` list; each entry contains
+`name`, `tenant`, `subscription`, `region` (Azure programmatic identifier), and
+initial `status`. Use `--branch <branch>` and `--data <catalog.yaml>` for preview;
+add `--apply` to create missing groups. The default catalog path is
+`data/azure_resource_groups.yaml`.
+
+The command reads all dependencies and existing groups with SDK pagination.
+Tenant/subscription names and region identifiers are matched case-insensitively;
+all must resolve uniquely to existing objects. Resource-group identity is its
+subscription plus case-insensitive name. Exact-name or region differences on a
+matched group are conflicts. All conflicts prevent writes. Initial status is set
+only on creation; operational status and tag edits are preserved on reruns.
+No dependencies, tags, or network resources are created. Partial writes are not
+rolled back; inspect and rerun after failure. Exit codes are 0 for success and 1
+for invalid input, conflicts, or API failure.
+
+The first requested group is `rg-conn-prd-network` in the `fake-corp` Connectivity
+subscription, intended to hold network resources. The catalog selects Australia
+East (`australiaeast`) and initial status Planned. Tool behavior has been tested
+offline with Typer CliRunner, including conflicts and preservation on reruns.
+The full suite passes 266 tests and Ruff checks.
+
+Verified validation-branch commands:
+
+```sh
+uv run infrahubctl branch create connectivity-resource-group
+uv run python scripts/seed_azure_resource_groups.py --branch connectivity-resource-group
+uv run python scripts/seed_azure_resource_groups.py --branch connectivity-resource-group --apply
+uv run python scripts/seed_azure_resource_groups.py --branch connectivity-resource-group --apply
+uv run python scripts/verify_schema.py --branch connectivity-resource-group
+uv run python scripts/check_azure_tags.py --branch connectivity-resource-group
+```
+
+First apply created one group; the second created zero and matched the existing
+group. Live field reads verified its name, Connectivity membership, Australia East
+region, and Planned status. No network resources or tags were created.
+
+Merged using `INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge connectivity-resource-group`.
+On `main`, the seed preview matched one group, schema and tag verification passed,
+and field reads confirmed the original group ID and its fake-corp tenant membership.
+
+## Virtual-network foundation
+
+`schemas/local/virtual_networks.yml` strengthens the existing `AzureVirtualNetwork`
+model without changing vendored schemas. Virtual Networks retain their API type,
+route `/objects/AzureVirtualNetwork`, status choices (default Planned), tags, and
+subnet relationships.
+
+Every VNet requires a resource group, an independently selected Region, and at
+least one IPAM prefix in `address_space`, including Planned records. Subscription
+is reached through the resource group. Address space remains a many-valued
+`BuiltinIPPrefix` relationship, supporting IPv4/IPv6 and namespace isolation;
+no CIDR text field or new namespace is introduced.
+
+Names follow [Microsoft's VNet naming rules](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules):
+2–64 ASCII letters/digits, underscores, periods, or hyphens; start with a letter or
+digit and end with a letter, digit, or underscore. Required read-only `name_key`
+computes lowercase from `name`, and `[resourcegroup, name_key__value]` enforces
+case-insensitive uniqueness within each resource group. Names can be reused in
+other resource groups; displayed names retain their case.
+
+These are schema constraints enforced on writes. They do not establish deployment
+readiness: overlap, subnet containment, and Azure-specific address-range checks
+remain deferred, alongside DNS, peering, subnet enhancements, Azure identifiers,
+allocation, seeding, and deployment. Existing IPAM catalog prefixes are unchanged;
+this schema change creates no VNet, subnet, prefix, or tag records.
+
+Validated on `azure-virtual-networks` with zero existing VNets. The schema check
+passed without warnings, load and verification passed, and an unchanged reload
+required no changes. Verified commands:
+
+```sh
+uv run python scripts/check_schema.py --branch azure-virtual-networks
+uv run infrahubctl schema load schemas --branch azure-virtual-networks --wait 30
+uv run python scripts/verify_schema.py --branch azure-virtual-networks
+INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge azure-virtual-networks
+uv run python scripts/check_schema.py --branch main
+uv run python scripts/verify_schema.py --branch main
+uv run python scripts/seed_azure_resource_groups.py --branch main
+uv run python scripts/seed_ipam.py --branch main
+```
+
+After merge, `main` had an empty schema diff and passing schema verification.
+Both seed previews found no missing objects or conflicts: one resource group and
+the existing namespace plus 19 prefixes matched. VNets and subnets remain empty.
+All 297 offline tests passed, including upstream hash verification, alongside Ruff
+lint and formatting checks. Invalid-name and constraint scenarios used offline
+fixtures; no live test objects were created.
 
 ## Source of truth and project boundaries
 

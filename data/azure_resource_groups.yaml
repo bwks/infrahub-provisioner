@@ -1,0 +1,7 @@
+# Agreed infrastructure intent; this group will hold Connectivity network resources.
+resource_groups:
+  - name: rg-conn-prd-network
+    tenant: fake-corp
+    subscription: Connectivity
+    region: australiaeast
+    status: planned

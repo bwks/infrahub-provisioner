@@ -1,0 +1,39 @@
+# Repository-owned VNet identity and required planning relationships.
+version: '1.0'
+nodes:
+  - name: VirtualNetwork
+    namespace: Azure
+    label: Virtual Networks
+    inherit_from: [AzureResource, AzureTaggable]
+    uniqueness_constraints:
+      - [resourcegroup, name_key__value]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        parameters:
+          min_length: 2
+          max_length: 64
+          regex: '^[A-Za-z0-9][A-Za-z0-9_.-]*[A-Za-z0-9_]\Z'
+      - name: name_key
+        label: Normalized Name
+        description: Computed lowercase name used for resource-group-scoped uniqueness.
+        kind: Text
+        read_only: true
+        optional: false
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: '{{ name__value | lower }}'
+    relationships:
+      - name: location
+        label: Region
+        peer: AzureRegion
+        cardinality: one
+        kind: Attribute
+        optional: false
+      - name: address_space
+        peer: BuiltinIPPrefix
+        cardinality: many
+        kind: Attribute
+        optional: false
+        min_count: 1

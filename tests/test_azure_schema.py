@@ -20,6 +20,7 @@ def schemas():
         Path("schemas/local/azure_status.yml"),
         Path("schemas/local/cloud_locations.yml"),
         Path("schemas/local/resource_tags.yml"),
+        Path("schemas/local/virtual_networks.yml"),
     ):
         data = yaml.safe_load(path.read_text())
         for section in ("generics", "nodes"):
@@ -52,12 +53,20 @@ def schemas():
             definition["hierarchy"] = "AzureManagementGroupHierarchy"
         if kind in ("AzureRegion", "LocationGroup"):
             definition["hierarchy"] = "LocationGeneric"
+        # SDK 1.22 exposes the server's legacy attribute fields, not parameters.
+        for attribute in definition.get("attributes", []):
+            attribute.update(attribute.get("parameters", {}))
         nodes[kind] = cls(**definition)
     for node in nodes.values():
         node.relationships.extend(node.hierarchical_relationship_schemas)
         for parent in getattr(node, "inherit_from", []):
-            node.relationships.extend(nodes[parent].relationships)
-            node.attributes.extend(nodes[parent].attributes)
+            for field in ("relationships", "attributes"):
+                inherited = {
+                    item.name: item.model_copy(deep=True)
+                    for item in getattr(nodes[parent], field)
+                }
+                inherited.update({item.name: item for item in getattr(node, field)})
+                setattr(node, field, list(inherited.values()))
 
     return nodes
 
@@ -499,3 +508,133 @@ def test_tag_checker_pagination(schemas, monkeypatch, capsys):
         for c in operation.call_args_list
     )
     assert all(c.kwargs["branch_name"] == "test" for c in operation.call_args_list)
+
+
+@pytest.mark.parametrize(
+    "edit", ["missing", "region_scope", "writable", "optional", "global"]
+)
+def test_resource_group_uniqueness_contract(schemas, edit):
+    rg = schemas["AzureResourceGroup"]
+    if edit == "missing":
+        rg.uniqueness_constraints = []
+    elif edit == "region_scope":
+        rg.uniqueness_constraints = [["location", "name_key__value"]]
+    else:
+        setattr(
+            rg.get_attribute("name_key"),
+            {"writable": "read_only", "optional": "optional", "global": "unique"}[edit],
+            edit != "writable",
+        )
+    with pytest.raises(ValueError, match="AzureResourceGroup"):
+        verify_azure(schemas)
+
+
+def test_normalized_resource_group_identity():
+    from jinja2 import Environment
+
+    data = yaml.safe_load(Path("schemas/local/resource_tags.yml").read_text())
+    rg = next(n for n in data["nodes"] if n["name"] == "ResourceGroup")
+    attribute = next(a for a in rg["attributes"] if a["name"] == "name_key")
+    assert attribute["computed_attribute"]["kind"] == "Jinja2"
+    template = Environment().from_string(
+        attribute["computed_attribute"]["jinja2_template"]
+    )
+
+    def identity(subscription, name):
+        return subscription, template.render(name__value=name)
+
+    assert identity("sub1", "RG-Conn-PRD-Network") == identity(
+        "sub1", "rg-conn-prd-network"
+    )
+    assert identity("sub1", "rg-conn-prd-network") != identity(
+        "sub2", "rg-conn-prd-network"
+    )
+    assert identity("sub1", "rg-network") != identity("sub1", "rg-other")
+
+
+@pytest.mark.parametrize(
+    "name,valid",
+    [
+        ("a", False),
+        ("ab", True),
+        ("a" * 64, True),
+        ("a" * 65, False),
+        ("A.b-c_9", True),
+        ("a_", True),
+        ("_ab", False),
+        ("ab-", False),
+        ("ab.", False),
+        ("a b", False),
+        ("a/b", False),
+        ("éa", False),
+        ("ab\n", False),
+    ],
+)
+def test_vnet_name_rules(schemas, name, valid):
+    import re
+
+    attribute = schemas["AzureVirtualNetwork"].get_attribute("name")
+    accepted = (
+        attribute.min_length <= len(name) <= attribute.max_length
+        and re.search(attribute.regex, name) is not None
+    )
+    assert accepted == valid
+
+
+@pytest.mark.parametrize("field", ["resourcegroup", "location", "address_space"])
+def test_vnet_required_relationships(schemas, field):
+    schemas["AzureVirtualNetwork"].get_relationship(field).optional = True
+    with pytest.raises(ValueError, match=f"AzureVirtualNetwork.{field}"):
+        verify_azure(schemas)
+
+
+def test_vnet_requires_nonempty_address_space(schemas):
+    schemas["AzureVirtualNetwork"].get_relationship("address_space").min_count = 0
+    with pytest.raises(ValueError, match="AzureVirtualNetwork.address_space"):
+        verify_azure(schemas)
+
+
+@pytest.mark.parametrize(
+    "scope", [[], [["location", "name_key__value"]], [["name_key__value"]]]
+)
+def test_vnet_uniqueness_scope(schemas, scope):
+    schemas["AzureVirtualNetwork"].uniqueness_constraints = scope
+    with pytest.raises(ValueError, match="AzureVirtualNetwork uniqueness"):
+        verify_azure(schemas)
+
+
+@pytest.mark.parametrize(
+    "field,value", [("optional", True), ("read_only", False), ("unique", True)]
+)
+def test_vnet_normalized_name_contract(schemas, field, value):
+    setattr(schemas["AzureVirtualNetwork"].get_attribute("name_key"), field, value)
+    with pytest.raises(ValueError, match="AzureVirtualNetwork.name_key"):
+        verify_azure(schemas)
+
+
+def test_vnet_normalized_identity():
+    from jinja2 import Environment
+
+    data = yaml.safe_load(Path("schemas/local/virtual_networks.yml").read_text())
+    key = next(a for a in data["nodes"][0]["attributes"] if a["name"] == "name_key")
+    assert key["computed_attribute"]["kind"] == "Jinja2"
+    template = Environment().from_string(key["computed_attribute"]["jinja2_template"])
+
+    def identity(group, name):
+        return group, template.render(name__value=name)
+
+    assert identity("rg1", "VNet-Prod") == identity("rg1", "vnet-prod")
+    assert identity("rg1", "vnet-prod") != identity("rg2", "vnet-prod")
+
+
+def test_vnet_overrides_do_not_change_other_resource_types(schemas):
+    vnet = schemas["AzureVirtualNetwork"]
+    assert not vnet.get_relationship("location").optional
+    assert schemas["AzureResource"].get_relationship("location").optional
+    assert schemas["AzureResource"].get_attribute("name").regex is None
+    assert (
+        schemas["AzureVirtualNetworkSubnet"]
+        .get_relationship("address_prefixes")
+        .optional
+    )
+    assert sum(r.name == "location" for r in vnet.relationships) == 1
