@@ -14,6 +14,7 @@ OWNER_KINDS = (
     "AzureVirtualNetwork",
     "AzureNetworkSecurityGroup",
     "AzureRouteTable",
+    "AzureStorageAccount",
 )
 INVALID_KEY_CHARACTERS = set("<>%&\\?/")
 

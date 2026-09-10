@@ -68,6 +68,27 @@ spec:
             icon: mdi:routes
             kind: AzureRouteTable
       - namespace: Azuremenu
+        name: Storage
+        label: Storage
+        icon: mdi:database-outline
+        children:
+          data:
+          - namespace: Azuremenu
+            name: StorageAccount
+            label: Storage Accounts
+            kind: AzureStorageAccount
+            icon: mdi:database-outline
+          - namespace: Azuremenu
+            name: BlobContainer
+            label: Blob Containers
+            kind: AzureBlobContainer
+            icon: mdi:folder-outline
+          - namespace: Azuremenu
+            name: TerraformStateBackend
+            label: Terraform State Backends
+            kind: AzureTerraformStateBackend
+            icon: mdi:terraform
+      - namespace: Azuremenu
         name: Reference
         label: Reference
         icon: mdi:book-open-outline

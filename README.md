@@ -1288,6 +1288,7 @@ relationships, and object routes:
 | --- | --- |
 | Organization | Tenants, Management Groups, Subscriptions, Resource Groups |
 | Networking | Virtual Networks, VNet Peerings, Subnets, Network Security Groups, Route Tables |
+| Storage | Storage Accounts, Blob Containers, Terraform State Backends |
 | Reference | Regions, Tags |
 
 The Management Groups link opens `/objects/AzureManagementGroupHierarchy`, keeping
@@ -1321,15 +1322,108 @@ same schema and menu files to main. The menu validator checks file structure;
 verify the resulting `/api/menu?branch=<branch>` response too, including nesting,
 unique links, and the `/ipam` route. No resource seed data is changed by this workflow.
 
-Validated on `azure-menu` and applied to main on 2026-09-10 using the schema and
-menu loaders. The generated menu contains exactly one Azure root, three groups,
-and 11 links. Repeat branch loads retain exactly 15 Azure menu records, and an
+The initial navigation was validated on `azure-menu` and applied to main on
+2026-09-10 using the schema and menu loaders. At that rollout it contained one
+Azure root, three groups and 11 links; repeat loads retained 15 records. An
 unchanged schema reload reports no changes. Generated non-Azure and internal menu
 sections match their previous values, including IPAM's `/ipam` entry. Main schema
 and network verification and the IPAM seed preview pass; all 26 prefixes remain.
 Worker schema hashes are synchronized, and no branches are stuck merging. All
 523 existing offline tests and Ruff checks passed. Menu layout was verified via
 the API response used by the UI.
+
+## Blob Storage and Terraform state intent
+
+`schemas/local/storage.yml` adds three models under **Azure → Storage**:
+
+| Model | Ownership and identity |
+| --- | --- |
+| Storage Account | Required resource group and region; Azure tags; unique lowercase account name |
+| Blob Container | Required parent storage account; name unique within that account; private access |
+| Terraform State Backend | Required container reference and case-sensitive state blob key; destination unique within the container |
+
+All three have a description and Planned status. Storage accounts inherit the
+existing Azure resource and tagging generics. Containers and backend references
+derive their context through relationships; they have no separate region,
+resource group, tags, GUID requirement, or credentials. Account names are unique
+within modeled data; actual Azure-wide availability is checked during deployment.
+
+The initial account configuration is standard general-purpose v2 (`StorageV2`),
+Hot access tier, and `Standard_LRS`. The SKU dropdown also supports `Standard_ZRS`,
+`Standard_GRS`, `Standard_RAGRS`, `Standard_GZRS`, and `Standard_RAGZRS`. Regional
+availability is not discovered. Hierarchical namespace, premium/legacy accounts,
+and other access tiers are outside this first model.
+
+Public network access defaults enabled, permitting all networks to reach the
+public endpoint. This is separate from anonymous access: containers are private,
+anonymous account access and Shared Key access default disabled, HTTPS defaults
+required, and minimum TLS is 1.2. Backend authentication is Microsoft Entra ID.
+Public access can be disabled as intent, but this version does not model private
+endpoints, private DNS, or firewall allowlists and does not guarantee reachability.
+
+Blob versioning defaults enabled. Blob and container soft-delete retention each
+default to seven days; an explicit null retention means the respective policy is
+disabled, while configured values must be integers from 1 through 365. Versioning
+and retention are separate settings; no lifecycle policy deletes old versions.
+
+Terraform backend configuration corresponds to these modeled values:
+
+| Terraform setting | Infrahub source |
+| --- | --- |
+| `storage_account_name` | Backend → container → storage account → name |
+| `container_name` | Backend → container → name |
+| `key` | Backend's State Blob Key, preserving case |
+| `use_azuread_auth` | True for the modeled Entra ID authentication |
+
+Runner identity, tenant/client IDs used for authentication, OIDC or CLI sessions,
+and permissions are supplied by the deployment environment. No access keys, SAS
+tokens, client secrets, Terraform state contents, or lock records belong in these
+models. Terraform creates the state blob and uses native Azure Blob leases for
+locking. The storage account and container must already exist before Terraform
+initializes its backend; their bootstrap deployment belongs in a separate project.
+This step supplies neither a backend exporter nor Azure deployment code.
+
+Validate modeled intent with:
+
+```sh
+uv run python scripts/check_azure_storage.py --branch <branch>
+```
+
+The command reads every storage account, container and backend plus their context
+with SDK pagination. It reports all findings with identifiers, returning 0 for
+valid/empty inventory and 1 for invalid data or read failures. It validates names,
+references, duplicate destinations, settings, retention ranges and backend security.
+State keys have 1–1024 characters and at most 254 slash-separated segments; the
+project additionally rejects trailing dots/separators and control, surrogate and
+terminal Unicode noncharacters. Keys are never normalized or lowercased.
+
+Schema constraints enforce names, scopes, choices and number ranges on writes.
+The CLI additionally rejects backend accounts permitting anonymous/Shared Key
+access or disabling HTTPS, and malformed keys/settings. Checks apply to Planned
+records too. Server-normalized optional flags on defaulted attributes are accepted
+by the verifier; the storage validator still requires actual Boolean values.
+The validator does not prove network access, permissions, SKU availability, or
+Azure deployment readiness. Azure tag validation now accepts storage account owners.
+
+Use the existing schema loader and the separate menu loader, with explicit branch
+selection; validate on `azure-storage` before applying the tested files to main.
+There is no storage seed workflow or live storage/backend data in this milestone.
+
+References: [Terraform Azure backend](https://developer.hashicorp.com/terraform/language/backend/azurerm),
+[Azure storage naming](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules),
+[container/blob names](https://learn.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata).
+
+Storage rollout verified on 2026-09-10: `azure-storage` accepted the three new
+types without warnings, and unchanged schema/menu reloads passed with 19 unique
+Azure menu records. The tested schema and menu files were applied to main through
+their loaders. Main has an empty schema diff and passes schema, storage, network
+and tag checks; subnet, VNet and IPAM seed previews have no missing records or
+conflicts. All 130 existing infrastructure object IDs, attributes and relationships
+match the preserved snapshot, including six subnets and 26 prefixes. Storage
+account, container and backend counts are all zero. Active workers have matching
+schema hashes and no branches are stuck merging. All 605 offline tests and Ruff
+checks passed. The Storage menu, existing hierarchy links, non-Azure menus and
+IPAM routes were verified through the generated menu API.
 
 ## Source of truth and project boundaries
 

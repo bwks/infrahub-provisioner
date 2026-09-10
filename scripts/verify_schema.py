@@ -23,6 +23,9 @@ AZURE_NODES = (
     "AzureSubnetDelegation",
     "AzureSubnetServiceEndpoint",
     "AzureVirtualNetworkPeering",
+    "AzureStorageAccount",
+    "AzureBlobContainer",
+    "AzureTerraformStateBackend",
 )
 
 
@@ -118,6 +121,7 @@ def verify_azure(schemas) -> None:
             field == "address_space" and relationship.min_count != 1
         ):
             raise ValueError(f"AzureVirtualNetwork.{field} must be required")
+    verify_storage(schemas)
     verify_peering(schemas)
     verify_service_endpoints(schemas)
     verify_subnet_delegation(schemas)
@@ -182,6 +186,117 @@ def verify_azure(schemas) -> None:
             or relationship.cardinality != cardinality
         ):
             raise ValueError(f"{kind}.{name} must refer to {cardinality} {peer}")
+
+
+def verify_storage(schemas):
+    if __package__:
+        from .check_azure_storage import (
+            ACCOUNT,
+            CONTAINER,
+            BACKEND,
+            ACCOUNT_RE,
+            CONTAINER_RE,
+            CHOICES,
+            BOOLEANS,
+            RETENTIONS,
+        )
+    else:
+        from check_azure_storage import (
+            ACCOUNT,
+            CONTAINER,
+            BACKEND,
+            ACCOUNT_RE,
+            CONTAINER_RE,
+            CHOICES,
+            BOOLEANS,
+            RETENTIONS,
+        )
+    account, container, backend = (schemas[k] for k in (ACCOUNT, CONTAINER, BACKEND))
+    if (
+        set(account.inherit_from) != {"AzureResource", "AzureTaggable"}
+        or container.inherit_from
+        or backend.inherit_from
+    ):
+        raise ValueError(
+            "Azure storage inheritance must reflect resource and container ownership"
+        )
+    for kind, low, high, regex, unique in [
+        (ACCOUNT, 3, 24, ACCOUNT_RE, True),
+        (CONTAINER, 3, 63, CONTAINER_RE, False),
+        (BACKEND, 1, 128, None, False),
+    ]:
+        node = schemas[kind]
+        name = node.get_attribute("name")
+        if (
+            name.kind != "Text"
+            or name.optional
+            or name.min_length != low
+            or name.max_length != high
+            or name.regex != regex
+            or name.unique != unique
+        ):
+            raise ValueError(f"{kind}.name has invalid constraints")
+        if node.display_label != "name__value":
+            raise ValueError(f"{kind} must display its name")
+    if container.uniqueness_constraints != [
+        ["storage_account", "name__value"]
+    ] or backend.uniqueness_constraints != [["container", "key__value"]]:
+        raise ValueError("Azure storage container/backend uniqueness has invalid scope")
+    for kind, field, choices, default in [
+        (ACCOUNT, k, v, v[0]) for k, v in CHOICES.items()
+    ] + [
+        (CONTAINER, "public_access", ("private",), "private"),
+        (BACKEND, "authentication", ("entra_id",), "entra_id"),
+    ]:
+        a = schemas[kind].get_attribute(field)
+        if (
+            a.kind != "Dropdown"
+            or a.default_value != default
+            or {v["name"] for v in a.choices or []} != set(choices)
+        ):
+            raise ValueError(f"{kind}.{field} has invalid choices/default")
+    for field, default in BOOLEANS.items():
+        a = account.get_attribute(field)
+        # Server normalizes defaulted attributes to optional.
+        if a.kind != "Boolean" or a.default_value is not default:
+            raise ValueError(f"{ACCOUNT}.{field} has invalid Boolean/default")
+    for field in RETENTIONS:
+        a = account.get_attribute(field)
+        if a.kind != "Number" or not a.optional or a.default_value != 7:
+            raise ValueError(
+                f"{ACCOUNT}.{field} must default to seven days and allow null"
+            )
+    key = backend.get_attribute("key")
+    if (
+        key.kind != "Text"
+        or key.optional
+        or key.min_length != 1
+        or key.max_length != 1024
+    ):
+        raise ValueError(f"{BACKEND}.key must be required Text of 1–1024 characters")
+    for kind, field, peer, relkind, many, optional in [
+        (ACCOUNT, "resourcegroup", "AzureResourceGroup", "Parent", False, False),
+        (ACCOUNT, "location", "AzureRegion", "Attribute", False, False),
+        (ACCOUNT, "containers", CONTAINER, "Component", True, True),
+        (CONTAINER, "storage_account", ACCOUNT, "Parent", False, False),
+        (CONTAINER, "state_backends", BACKEND, "Generic", True, True),
+        (BACKEND, "container", CONTAINER, "Attribute", False, False),
+    ]:
+        r = schemas[kind].get_relationship(field)
+        if (r.peer, r.kind, r.cardinality, r.optional) != (
+            peer,
+            relkind,
+            "many" if many else "one",
+            optional,
+        ):
+            raise ValueError(f"{kind}.{field} has invalid relationship")
+    if (
+        account.get_relationship("containers").identifier
+        != container.get_relationship("storage_account").identifier
+        or container.get_relationship("state_backends").identifier
+        != backend.get_relationship("container").identifier
+    ):
+        raise ValueError("Azure storage relationship identifiers must match")
 
 
 def verify_peering(schemas):
@@ -514,6 +629,7 @@ def verify_tags(schemas) -> None:
         "AzureVirtualNetwork",
         "AzureNetworkSecurityGroup",
         "AzureRouteTable",
+        "AzureStorageAccount",
     }
     for kind in (*supported, "AzureTaggable"):
         rel = schemas[kind].get_relationship_or_none("tags")

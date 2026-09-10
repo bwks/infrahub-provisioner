@@ -486,8 +486,8 @@ requires an actual Boolean value for all eight settings and rejects null values.
 
 ## Azure navigation
 
-- `menus/azure.yml` owns 15 CoreMenuItem records under stable namespace `Azuremenu`:
-  Azure root, Organization/Networking/Reference groups, and 11 links. Use the SDK
+- `menus/azure.yml` owns 19 CoreMenuItem records under stable namespace `Azuremenu`:
+  Azure root, Organization/Networking/Storage/Reference groups, and 14 links. Use the SDK
   menu loader with an explicit branch; it upserts existing identities. Removing
   YAML entries does not delete existing menu objects automatically.
 - `schemas/local/azure_menu.yml` sets include_in_menu false for Azure models and
@@ -500,3 +500,25 @@ requires an actual Boolean value for all eight settings and rejects null values.
   `uv run infrahubctl menu load menus/azure.yml --branch <branch>` after schema load.
   Confirm generated `/api/menu` nesting, paths, ordering, unrelated-menu preservation,
   and unchanged reloads. Menu configuration is separate from schema discovery.
+
+## Blob Storage and Terraform backends
+
+- `schemas/local/storage.yml` adds AzureStorageAccount, AzureBlobContainer, and
+  AzureTerraformStateBackend. Only accounts inherit AzureResource/AzureTaggable.
+  Account names are globally scoped within the model; container names are scoped
+  to accounts; case-sensitive backend keys are scoped to containers.
+- Accounts default StorageV2, Standard_LRS, Hot, public access enabled for all
+  networks, HTTPS only, TLS1_2, anonymous/Shared Key access disabled, versioning
+  enabled, and seven-day blob/container retention. Null retention disables that
+  policy. Six standard SKUs are supported; private networking is deferred.
+- `uv run python scripts/check_azure_storage.py --branch <branch>` is a paginated
+  read-only gate, exit 0 valid/empty or 1 invalid/read failure. It checks references,
+  naming, settings, retention, state keys/destination uniqueness and backend security.
+  It does not establish network reachability, authorization, regional SKU support,
+  or Azure-wide name availability. Keep fixtures offline.
+- Model Entra ID backend authentication only; no credentials, state blobs, locks,
+  exporter, RBAC objects, actual Azure deployment or storage seed data. Terraform
+  creates the blob; account/container provisioning must precede backend init in
+  the separate deployment project. Unknown Azure IDs are not prerequisites here.
+- Storage menu links and automatic-menu suppression follow the existing convention.
+  Extend schema/tag verification with accounts; preserve existing data and IPAM.

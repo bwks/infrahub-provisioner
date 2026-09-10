@@ -22,6 +22,7 @@ def schemas():
         Path("schemas/local/cloud_locations.yml"),
         Path("schemas/local/network_policy.yml"),
         Path("schemas/local/resource_tags.yml"),
+        Path("schemas/local/storage.yml"),
         Path("schemas/local/subnet_delegation.yml"),
         Path("schemas/local/subnet_service_endpoints.yml"),
         Path("schemas/local/virtual_networks.yml"),
@@ -817,4 +818,48 @@ def test_peering_server_normalized_defaults(schemas):
     )["nodes"][1]
     assert all(
         a["optional"] is False for a in source["attributes"] if a["kind"] == "Boolean"
+    )
+
+
+@pytest.mark.parametrize(
+    "edit", ["name", "scope", "default", "retention", "parent", "tags", "key"]
+)
+def test_storage_schema_contract(schemas, edit):
+    from scripts.verify_schema import verify_tags
+
+    account = schemas["AzureStorageAccount"]
+    if edit == "name":
+        account.get_attribute("name").unique = False
+    elif edit == "scope":
+        schemas["AzureBlobContainer"].uniqueness_constraints = []
+    elif edit == "default":
+        account.get_attribute("public_network_access_enabled").default_value = False
+    elif edit == "retention":
+        account.get_attribute("blob_delete_retention_days").default_value = 0
+    elif edit == "parent":
+        schemas["AzureTerraformStateBackend"].get_relationship(
+            "container"
+        ).optional = True
+    elif edit == "tags":
+        account.inherit_from = ["AzureResource"]
+    else:
+        schemas["AzureTerraformStateBackend"].get_attribute("key").optional = True
+    with pytest.raises(ValueError, match="[Ss]torage|AzureTerraformStateBackend"):
+        verify_azure(schemas)
+        verify_tags(schemas)
+
+
+def test_storage_retention_parameters_and_tag_support(schemas):
+    from scripts.check_azure_tags import Tag, validate
+
+    node = yaml.safe_load(Path("schemas/local/storage.yml").read_text())["nodes"][0]
+    fields = [a for a in node["attributes"] if a["name"].endswith("_retention_days")]
+    assert len(fields) == 2
+    assert all(a["parameters"] == {"min_value": 1, "max_value": 365} for a in fields)
+    assert (
+        validate(
+            [Tag("tag", "Environment", "Production", "account")],
+            {"account": "AzureStorageAccount"},
+        )
+        == []
     )

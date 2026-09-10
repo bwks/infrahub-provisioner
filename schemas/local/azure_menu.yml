@@ -1,4 +1,4 @@
-# Azure navigation is managed by menus/azure.yml. Keep other schemas automatic.
+# Azure navigation is managed by menus/azure.yml.
 version: '1.0'
 nodes:
 - name: Tenant
@@ -44,6 +44,15 @@ nodes:
   namespace: Azure
   include_in_menu: false
 - name: VirtualNetworkPeering
+  namespace: Azure
+  include_in_menu: false
+- name: StorageAccount
+  namespace: Azure
+  include_in_menu: false
+- name: BlobContainer
+  namespace: Azure
+  include_in_menu: false
+- name: TerraformStateBackend
   namespace: Azure
   include_in_menu: false
 generics:

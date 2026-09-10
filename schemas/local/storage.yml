@@ -1,0 +1,287 @@
+# Storage intent only; no resources or Terraform state blobs are seeded.
+version: '1.0'
+nodes:
+- name: StorageAccount
+  namespace: Azure
+  label: Storage Accounts
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    unique: true
+    parameters:
+      min_length: 3
+      max_length: 24
+      regex: ^[a-z0-9]{3,24}\Z
+  - name: account_kind
+    kind: Dropdown
+    optional: false
+    default_value: StorageV2
+    choices:
+    - name: StorageV2
+      label: StorageV2
+    label: Account Kind
+  - name: sku
+    kind: Dropdown
+    optional: false
+    default_value: Standard_LRS
+    choices:
+    - name: Standard_LRS
+      label: Standard_LRS
+    - name: Standard_ZRS
+      label: Standard_ZRS
+    - name: Standard_GRS
+      label: Standard_GRS
+    - name: Standard_RAGRS
+      label: Standard_RAGRS
+    - name: Standard_GZRS
+      label: Standard_GZRS
+    - name: Standard_RAGZRS
+      label: Standard_RAGZRS
+    label: SKU
+  - name: access_tier
+    kind: Dropdown
+    optional: false
+    default_value: Hot
+    choices:
+    - name: Hot
+      label: Hot
+    label: Access Tier
+  - name: minimum_tls_version
+    kind: Dropdown
+    optional: false
+    default_value: TLS1_2
+    choices:
+    - name: TLS1_2
+      label: TLS 1.2
+    label: Minimum TLS Version
+  - name: public_network_access_enabled
+    kind: Boolean
+    optional: false
+    default_value: true
+    label: Public Network Access Enabled
+    description: Enable authenticated public access from all networks. Disabling does
+      not configure private connectivity.
+  - name: https_only
+    kind: Boolean
+    optional: false
+    default_value: true
+    label: HTTPS Only
+  - name: allow_blob_public_access
+    kind: Boolean
+    optional: false
+    default_value: false
+    label: Allow Anonymous Blob Access
+  - name: allow_shared_key_access
+    kind: Boolean
+    optional: false
+    default_value: false
+    label: Allow Shared Key Access
+  - name: blob_versioning_enabled
+    kind: Boolean
+    optional: false
+    default_value: true
+    label: Blob Versioning Enabled
+  - name: blob_delete_retention_days
+    kind: Number
+    optional: true
+    default_value: 7
+    parameters:
+      min_value: 1
+      max_value: 365
+    description: Soft-delete retention in days. Null disables this retention policy.
+    label: Blob Soft-Delete Retention Days
+  - name: container_delete_retention_days
+    kind: Number
+    optional: true
+    default_value: 7
+    parameters:
+      min_value: 1
+      max_value: 365
+    description: Soft-delete retention in days. Null disables this retention policy.
+    label: Container Soft-Delete Retention Days
+  relationships:
+  - name: location
+    label: Region
+    peer: AzureRegion
+    kind: Attribute
+    cardinality: one
+    optional: false
+  - name: containers
+    peer: AzureBlobContainer
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_storage__containers
+  inherit_from:
+  - AzureResource
+  - AzureTaggable
+- name: BlobContainer
+  namespace: Azure
+  label: Blob Containers
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 3
+      max_length: 63
+      regex: ^[a-z0-9]+(?:-[a-z0-9]+)*\Z
+  - name: public_access
+    kind: Dropdown
+    optional: false
+    default_value: private
+    choices:
+    - name: private
+      label: Private
+    label: Container Access
+  relationships:
+  - name: storage_account
+    peer: AzureStorageAccount
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_storage__containers
+  - name: state_backends
+    peer: AzureTerraformStateBackend
+    kind: Generic
+    cardinality: many
+    optional: true
+    identifier: azure_container__backends
+  uniqueness_constraints:
+  - - storage_account
+    - name__value
+- name: TerraformStateBackend
+  namespace: Azure
+  label: Terraform State Backends
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 128
+  - name: key
+    kind: Text
+    label: State Blob Key
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 1024
+  - name: authentication
+    kind: Dropdown
+    optional: false
+    default_value: entra_id
+    choices:
+    - name: entra_id
+      label: Microsoft Entra ID
+    label: Authentication
+  relationships:
+  - name: container
+    peer: AzureBlobContainer
+    kind: Attribute
+    cardinality: one
+    optional: false
+    identifier: azure_container__backends
+  uniqueness_constraints:
+  - - container
+    - key__value
