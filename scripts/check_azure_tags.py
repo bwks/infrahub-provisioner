@@ -14,6 +14,8 @@ OWNER_KINDS = (
     "AzureVirtualNetwork",
     "AzureNetworkSecurityGroup",
     "AzureRouteTable",
+    "AzureVirtualWan",
+    "AzureVirtualHub",
     "AzureStorageAccount",
     "AzurePrivateDnsZone",
     "AzureDnsPrivateResolver",

@@ -1642,3 +1642,78 @@ an unchanged reload. Main had no private-zone instances requiring migration; the
 same files were loaded there and passed schema/DNS verification and an empty
 schema diff. All 130 existing objects and the 26 prefixes were preserved; the IPAM
 catalog preview reported no missing or conflicting entries. No DNS data was seeded.
+
+## Virtual WAN foundation and routing
+
+`schemas/local/virtual_wan.yml` adds Standard Virtual WANs, virtual hubs, hub
+route tables, and VNet hub connections under **Azure → Networking**. This is
+schema-only: no WAN, hub, connection, or route-table records are seeded. The
+existing `vnet-conn-prd-hub`, its six subnets, and all IPAM allocations remain
+ordinary VNet intent. A Virtual WAN hub is a separate Microsoft-managed network.
+
+WANs and hubs inherit Azure resource-group/region ownership and Azure tags.
+Hub connections and route tables belong to a hub and derive that ownership;
+they have no duplicated region, resource group, or tags. All four types have
+optional descriptions and shared status choices, initially Planned. Names use
+our network-name convention (1–80 characters, alphanumeric start, alphanumeric
+or underscore end, with periods/hyphens/underscores inside). Computed lowercase
+keys scope uniqueness to resource group for WANs/hubs and hub for child objects.
+A VNet has at most one hub connection. Azure GUIDs are not prerequisites.
+
+Each hub references one canonical IPv4 IPAM prefix of /24 or larger, a WAN in
+the same subscription, router capacity (2–50 infrastructure units, default 2),
+and routing preference (`ExpressRoute`, `ASPath`, or `VpnGateway`, default
+`ExpressRoute`). Hubs can use different regions and resource groups. VNet
+connections may cross regions, subscriptions, and tenants. Address spaces must
+not overlap between hubs and connected VNets anywhere within one WAN, even
+when the prefixes are in different IPAM namespaces. Separate WANs remain isolated.
+
+Complete modeled hubs require explicit `defaultRouteTable` and `noneRouteTable`
+records. The validator does not create them. Table `labels` is a JSON list of
+case-preserved strings: use `["Default"]` on the default table and `[]` on None.
+Custom tables can share labels across hubs in the same WAN. Every connection
+selects one `associated_route_table` belonging to its hub; None cannot be associated.
+
+| Propagation intent | Connection fields |
+| --- | --- |
+| Default cross-hub routing | `propagation_labels: ["Default"]` (default), `propagate_to_none: false` |
+| Selected tables in the local hub | `propagated_route_tables` references, with `propagation_labels: []` |
+| Tables grouped across hubs | `propagation_labels: ["Shared"]`, matching table labels in this WAN |
+| No propagation | `propagate_to_none: true`, `propagation_labels: []`, no propagated table references |
+
+Tables and labels can be combined. Empty selections with None disabled are
+incomplete intent. Labels must match a modeled table in the WAN; spelling and
+case are preserved. Use the explicit None switch rather than adding the None
+table to propagation selections. Association and propagation are independent.
+
+```sh
+uv run python scripts/check_azure_virtual_wan.py --branch <branch>
+```
+
+The read-only command paginates objects and nested relationships, reports all
+findings with affected identifiers, and returns 0 for valid/empty inventory or
+1 for invalid data/read failures. Run it alongside network and tag checks.
+These are CLI validation gates, not automatic enforcement on UI/API writes,
+reachability tests, or proof of Azure deployment readiness. Existing gateway
+resources, permissions, on-premises address overlap, and service availability
+are not discovered. A `GatewaySubnet` alone does not establish gateway presence.
+
+**Static routing is explicitly deferred in both places:** static routes inside
+hub route tables, and connection-level static routes to appliance IPs inside a
+connected VNet. Also deferred: VPN/ExpressRoute/point-to-site gateways, branch
+sites, firewalls/NVAs, routing intent, route maps, learned-route collection,
+Azure deployment, and seed data. Standard hub-to-hub connectivity is implicit;
+it is not modeled as paired VNet peering.
+
+Sources: [virtual hub settings](https://learn.microsoft.com/en-us/azure/virtual-wan/hub-settings),
+[hub routing and propagation](https://learn.microsoft.com/en-us/azure/virtual-wan/about-virtual-hub-routing),
+and [cross-tenant VNet connections](https://learn.microsoft.com/en-us/azure/virtual-wan/cross-tenant-vnet-az-cli).
+
+Virtual WAN rollout verified on `azure-virtual-wan` and `main` on 2026-09-10:
+899 offline tests, Ruff, and vendored schema hashes passed. Branch schema/menu
+reloads were unchanged, including all 28 menu identities. Main schema verification,
+empty schema diff, unchanged reload, Virtual WAN/network/DNS/tag/storage gates,
+and IPAM catalog preview passed. All 131 existing objects were preserved exactly
+(IDs, attributes, relationships), including the existing private DNS zone and
+26 prefixes. All four Virtual WAN inventories remain empty. No Azure resources
+or infrastructure seed records were created.

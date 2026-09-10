@@ -486,8 +486,8 @@ requires an actual Boolean value for all eight settings and rejects null values.
 
 ## Azure navigation
 
-- `menus/azure.yml` owns 24 CoreMenuItem records under stable namespace `Azuremenu`:
-  Azure root, Organization/Networking/DNS/Storage/Reference groups, and 18 links. Use the SDK
+- `menus/azure.yml` owns 28 CoreMenuItem records under stable namespace `Azuremenu`:
+  Azure root, Organization/Networking/DNS/Storage/Reference groups, and 22 links. Use the SDK
   menu loader with an explicit branch; it upserts existing identities. Removing
   YAML entries does not delete existing menu objects automatically.
 - `schemas/local/azure_menu.yml` sets include_in_menu false for Azure models and
@@ -582,3 +582,41 @@ requires an actual Boolean value for all eight settings and rejects null values.
   841 tests and Ruff passed, unchanged reload/schema diff passed, and all 130
   existing objects and 26 prefixes were preserved. Main had zero private-zone
   instances before the input change, so no data migration was needed.
+
+## Virtual WAN foundation and routing
+
+- `schemas/local/virtual_wan.yml` defines AzureVirtualWan, AzureVirtualHub,
+  AzureVirtualHubRouteTable and AzureVirtualHubConnection. Only WAN/hub inherit
+  AzureResource/AzureTaggable. Child ownership derives from the hub; all four
+  types have Planned lifecycle status and optional descriptions. Seed nothing.
+- Standard WAN only. A hub is distinct from AzureVirtualNetwork, owns one IPAM
+  IPv4 prefix /24 or larger, and belongs to a WAN in the same subscription.
+  Router capacity is 2–50 units (default 2); routing preference defaults ExpressRoute.
+  Existing VNet hub/subnets/IPAM remain unchanged. Never infer actual gateways
+  from GatewaySubnet or reuse paired peering to represent hub connections.
+- Require explicit defaultRouteTable/noneRouteTable records for complete hub
+  intent. Associated table belongs to the connection's hub and cannot be None.
+  Explicit propagation references stay in the local hub; case-preserved JSON
+  labels can select tables across hubs of the same WAN. Default label is Default.
+  Propagate to None requires empty propagation labels/references. Do not auto-seed
+  built-in tables or silently interpret incomplete selections as None.
+- `uv run python scripts/check_azure_virtual_wan.py --branch <branch>` is a
+  paginated read-only CLI gate (0 valid/empty, 1 invalid/read failure). Check
+  scoped names, required references, settings, built-ins, propagation, one hub
+  connection per VNet, and address overlap across IPAM namespaces within a WAN.
+  Cross-region/subscription/tenant VNet connections are allowed. Keep tests offline.
+- CLI semantic checks do not automatically enforce UI/API writes, prove routing
+  reachability, or discover gateways/on-premises networks. Run network/tag gates
+  as well. Add four Networking menu links and suppress duplicate automatic menus.
+- Explicitly defer both static routes in hub route tables and connection-level
+  static routes to appliance IPs in connected VNets. Gateways, branch sites,
+  firewalls/NVAs, routing intent, route maps, learned routes, deployment, and seeds
+  are also deferred. Validate a branch then load the same schema/menu files on
+  main sequentially; preserve existing records and verify unchanged reloads.
+- Virtual WAN rollout verified on azure-virtual-wan and main on 2026-09-10:
+  899 offline tests, Ruff, upstream hashes, schema/menu checks, branch unchanged
+  reloads, and main unchanged schema reload passed. All 131 current objects and
+  26 prefixes were preserved, including an operational private DNS zone added
+  since the previous rollout. Use a fresh pre-change snapshot rather than assuming
+  historical zero counts. WAN/network/DNS/tag/storage gates and IPAM preview passed;
+  all four new inventories remain empty. No infrastructure data was seeded.

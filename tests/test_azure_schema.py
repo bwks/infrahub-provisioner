@@ -23,6 +23,7 @@ def schemas():
         Path("schemas/local/network_policy.yml"),
         Path("schemas/local/resource_tags.yml"),
         Path("schemas/local/storage.yml"),
+        Path("schemas/local/virtual_wan.yml"),
         Path("schemas/local/dns.yml"),
         Path("schemas/local/subnet_delegation.yml"),
         Path("schemas/local/subnet_service_endpoints.yml"),
@@ -943,3 +944,37 @@ def test_dns_menu_contract():
         if n["include_in_menu"] is False
     }
     assert set(DNS_KINDS) <= hidden
+
+
+@pytest.mark.parametrize(
+    "kind,field",
+    [
+        ("AzureVirtualHub", "virtual_wan"),
+        ("AzureVirtualHubConnection", "associated_route_table"),
+        ("AzureVirtualHubRouteTable", "hub"),
+    ],
+)
+def test_virtual_wan_required_relationships(schemas, kind, field):
+    from scripts.verify_schema import verify_virtual_wan
+
+    schemas[kind].get_relationship(field).optional = True
+    with pytest.raises(ValueError, match=field):
+        verify_virtual_wan(schemas)
+
+
+def test_virtual_wan_menu():
+    from scripts.check_azure_virtual_wan import KINDS
+
+    data = yaml.safe_load(Path("menus/azure.yml").read_text())
+    networking = next(
+        g
+        for g in data["spec"]["data"][0]["children"]["data"]
+        if g["name"] == "Networking"
+    )
+    assert [n["kind"] for n in networking["children"]["data"]][-4:] == list(KINDS)
+    suppression = yaml.safe_load(Path("schemas/local/azure_menu.yml").read_text())
+    assert set(KINDS) <= {
+        n["namespace"] + n["name"]
+        for n in suppression["nodes"]
+        if not n["include_in_menu"]
+    }

@@ -82,6 +82,18 @@ nodes:
 - name: DnsForwardingRulesetLink
   namespace: Azure
   include_in_menu: false
+- name: VirtualWan
+  namespace: Azure
+  include_in_menu: false
+- name: VirtualHub
+  namespace: Azure
+  include_in_menu: false
+- name: VirtualHubRouteTable
+  namespace: Azure
+  include_in_menu: false
+- name: VirtualHubConnection
+  namespace: Azure
+  include_in_menu: false
 generics:
 - name: Resource
   namespace: Azure

@@ -67,6 +67,26 @@ spec:
             label: Route Tables
             icon: mdi:routes
             kind: AzureRouteTable
+          - namespace: Azuremenu
+            name: VirtualWan
+            label: Virtual WANs
+            kind: AzureVirtualWan
+            icon: mdi:wan
+          - namespace: Azuremenu
+            name: VirtualHub
+            label: Virtual Hubs
+            kind: AzureVirtualHub
+            icon: mdi:routes
+          - namespace: Azuremenu
+            name: VirtualHubRouteTable
+            label: Hub Route Tables
+            kind: AzureVirtualHubRouteTable
+            icon: mdi:routes
+          - namespace: Azuremenu
+            name: VirtualHubConnection
+            label: Hub Connections
+            kind: AzureVirtualHubConnection
+            icon: mdi:routes
       - namespace: Azuremenu
         name: DNS
         label: DNS

@@ -23,7 +23,11 @@ AZURE_NODES = (
     "AzureSubnetDelegation",
     "AzureSubnetServiceEndpoint",
     "AzureVirtualNetworkPeering",
+    "AzureVirtualWan",
+    "AzureVirtualHub",
     "AzureStorageAccount",
+    "AzureVirtualHubRouteTable",
+    "AzureVirtualHubConnection",
     "AzureBlobContainer",
     "AzureTerraformStateBackend",
     "AzurePrivateDnsZone",
@@ -130,6 +134,7 @@ def verify_azure(schemas) -> None:
             field == "address_space" and relationship.min_count != 1
         ):
             raise ValueError(f"AzureVirtualNetwork.{field} must be required")
+    verify_virtual_wan(schemas)
     verify_dns(schemas)
     verify_storage(schemas)
     verify_peering(schemas)
@@ -196,6 +201,97 @@ def verify_azure(schemas) -> None:
             or relationship.cardinality != cardinality
         ):
             raise ValueError(f"{kind}.{name} must refer to {cardinality} {peer}")
+
+
+def verify_virtual_wan(schemas):
+    if __package__:
+        from .check_azure_virtual_wan import (
+            KINDS,
+            WAN,
+            HUB,
+            TABLE,
+            CONNECTION,
+            REFERENCES,
+            MANY,
+            SCOPES,
+            NAME_RE,
+        )
+    else:
+        from check_azure_virtual_wan import (
+            KINDS,
+            WAN,
+            HUB,
+            TABLE,
+            CONNECTION,
+            REFERENCES,
+            MANY,
+            SCOPES,
+            NAME_RE,
+        )
+    for kind in KINDS:
+        schema = schemas[kind]
+        if ("AzureResource" in schema.inherit_from) != (kind in (WAN, HUB)):
+            raise ValueError(f"{kind}: incorrect resource inheritance")
+        if [SCOPES[kind], "name_key__value"] not in schema.uniqueness_constraints:
+            raise ValueError(f"{kind}: missing scoped name uniqueness")
+        name = schema.get_attribute("name")
+        key = schema.get_attribute("name_key")
+        if (
+            name.kind != "Text"
+            or name.optional
+            or name.min_length != 1
+            or name.max_length != 80
+            or name.regex != NAME_RE
+            or not key.read_only
+            or key.optional
+        ):
+            raise ValueError(f"{kind}: invalid name/name_key contract")
+        for field, peer in REFERENCES[kind].items():
+            rel = schema.get_relationship(field)
+            if rel.peer != peer or rel.cardinality != "one" or rel.optional:
+                raise ValueError(f"{kind}.{field}: must be one required {peer}")
+        for field, peer in MANY.get(kind, {}).items():
+            rel = schema.get_relationship(field)
+            if rel.peer != peer or rel.cardinality != "many" or not rel.optional:
+                raise ValueError(f"{kind}.{field}: invalid propagation relationship")
+    if ["virtual_network"] not in schemas[CONNECTION].uniqueness_constraints:
+        raise ValueError("Hub connection must be unique per VNet")
+    for kind, field, expected, default in (
+        (WAN, "wan_type", {"Standard"}, "Standard"),
+        (
+            HUB,
+            "routing_preference",
+            {"ExpressRoute", "ASPath", "VpnGateway"},
+            "ExpressRoute",
+        ),
+    ):
+        attr = schemas[kind].get_attribute(field)
+        if (
+            attr.kind != "Dropdown"
+            or {c["name"] for c in attr.choices} != expected
+            or attr.default_value != default
+        ):
+            raise ValueError(f"{kind}.{field}: invalid choices/default")
+    for kind, field, attr_kind, default in (
+        (HUB, "router_capacity", "Number", 2),
+        (TABLE, "labels", "JSON", []),
+        (CONNECTION, "propagation_labels", "JSON", ["Default"]),
+        (CONNECTION, "propagate_to_none", "Boolean", False),
+    ):
+        attr = schemas[kind].get_attribute(field)
+        if attr.kind != attr_kind or attr.default_value != default:
+            raise ValueError(f"{kind}.{field}: invalid kind/default")
+    for kind, field, peer, rel_kind in (
+        (WAN, "hubs", HUB, "Generic"),
+        (HUB, "route_tables", TABLE, "Component"),
+        (HUB, "connections", CONNECTION, "Component"),
+        ("AzureVirtualNetwork", "hub_connections", CONNECTION, "Generic"),
+        (TABLE, "associated_connections", CONNECTION, "Generic"),
+        (TABLE, "propagating_connections", CONNECTION, "Generic"),
+    ):
+        rel = schemas[kind].get_relationship(field)
+        if rel.peer != peer or rel.cardinality != "many" or rel.kind != rel_kind:
+            raise ValueError(f"{kind}.{field}: invalid reverse relationship")
 
 
 def verify_dns(schemas):
@@ -811,6 +907,8 @@ def verify_tags(schemas) -> None:
         "AzureVirtualNetwork",
         "AzureNetworkSecurityGroup",
         "AzureRouteTable",
+        "AzureVirtualWan",
+        "AzureVirtualHub",
         "AzureStorageAccount",
         "AzurePrivateDnsZone",
         "AzureDnsPrivateResolver",

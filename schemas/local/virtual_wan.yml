@@ -1,0 +1,373 @@
+# Virtual WAN intent only; no seed data or static routes.
+version: '1.0'
+nodes:
+- name: VirtualWan
+  namespace: Azure
+  label: Virtual WANs
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    description: Computed lowercase name used for resource-group-scoped uniqueness.
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: wan_type
+    kind: Dropdown
+    optional: false
+    default_value: Standard
+    choices:
+    - name: Standard
+      label: Standard
+  relationships:
+  - name: location
+    peer: AzureRegion
+    kind: Attribute
+    cardinality: one
+    optional: false
+    label: Region
+  - name: hubs
+    peer: AzureVirtualHub
+    kind: Generic
+    cardinality: many
+    optional: true
+    identifier: azure_wan__hubs
+  uniqueness_constraints:
+  - - resourcegroup
+    - name_key__value
+  inherit_from:
+  - AzureResource
+  - AzureTaggable
+- name: VirtualHub
+  namespace: Azure
+  label: Virtual Hubs
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    description: Computed lowercase name used for resource-group-scoped uniqueness.
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: router_capacity
+    kind: Number
+    optional: false
+    default_value: 2
+    parameters:
+      min_value: 2
+      max_value: 50
+  - name: routing_preference
+    kind: Dropdown
+    optional: false
+    default_value: ExpressRoute
+    choices:
+    - name: ExpressRoute
+      label: ExpressRoute
+    - name: ASPath
+      label: ASPath
+    - name: VpnGateway
+      label: VpnGateway
+  relationships:
+  - name: location
+    peer: AzureRegion
+    kind: Attribute
+    cardinality: one
+    optional: false
+    label: Region
+  - name: virtual_wan
+    peer: AzureVirtualWan
+    kind: Attribute
+    cardinality: one
+    optional: false
+    identifier: azure_wan__hubs
+  - name: address_space
+    peer: BuiltinIPPrefix
+    kind: Attribute
+    cardinality: one
+    optional: false
+  - name: route_tables
+    peer: AzureVirtualHubRouteTable
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_hub__tables
+  - name: connections
+    peer: AzureVirtualHubConnection
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_hub__connections
+  uniqueness_constraints:
+  - - resourcegroup
+    - name_key__value
+  inherit_from:
+  - AzureResource
+  - AzureTaggable
+- name: VirtualHubRouteTable
+  namespace: Azure
+  label: Hub Route Tables
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    description: Computed lowercase name used for resource-group-scoped uniqueness.
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: labels
+    kind: JSON
+    optional: false
+    default_value: []
+    description: Case-preserved routing labels. Use ["Default"] on defaultRouteTable;
+      noneRouteTable has no labels.
+  relationships:
+  - name: hub
+    peer: AzureVirtualHub
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_hub__tables
+  - name: associated_connections
+    peer: AzureVirtualHubConnection
+    kind: Generic
+    cardinality: many
+    optional: true
+    identifier: azure_hub_table__associations
+  - name: propagating_connections
+    peer: AzureVirtualHubConnection
+    kind: Generic
+    cardinality: many
+    optional: true
+    identifier: azure_hub_table__propagation
+  uniqueness_constraints:
+  - - hub
+    - name_key__value
+- name: VirtualHubConnection
+  namespace: Azure
+  label: Hub Connections
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    description: Computed lowercase name used for resource-group-scoped uniqueness.
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: propagation_labels
+    kind: JSON
+    optional: false
+    default_value:
+    - Default
+    description: Case-preserved labels selecting tables across this WAN. Clear this
+      list when propagating to None.
+  - name: propagate_to_none
+    kind: Boolean
+    optional: false
+    default_value: false
+  relationships:
+  - name: hub
+    peer: AzureVirtualHub
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_hub__connections
+  - name: virtual_network
+    peer: AzureVirtualNetwork
+    kind: Attribute
+    cardinality: one
+    optional: false
+    identifier: azure_vnet__hub_connections
+  - name: associated_route_table
+    peer: AzureVirtualHubRouteTable
+    kind: Attribute
+    cardinality: one
+    optional: false
+    identifier: azure_hub_table__associations
+  - name: propagated_route_tables
+    peer: AzureVirtualHubRouteTable
+    kind: Attribute
+    cardinality: many
+    optional: true
+    identifier: azure_hub_table__propagation
+  uniqueness_constraints:
+  - - hub
+    - name_key__value
+  - - virtual_network
+- name: VirtualNetwork
+  namespace: Azure
+  inherit_from: [AzureResource, AzureTaggable]
+  relationships:
+  - name: hub_connections
+    peer: AzureVirtualHubConnection
+    kind: Generic
+    cardinality: many
+    optional: true
+    identifier: azure_vnet__hub_connections
