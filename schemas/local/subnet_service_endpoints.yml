@@ -1,0 +1,94 @@
+# Classic service endpoint selections; no endpoint assignments are seeded.
+# Services: Microsoft Learn overview, verified 2026-09-10.
+version: '1.0'
+nodes:
+- name: VirtualNetworkSubnet
+  namespace: Azure
+  relationships:
+  - name: service_endpoints
+    label: Service Endpoints
+    peer: AzureSubnetServiceEndpoint
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_subnet__service_endpoints
+- name: SubnetServiceEndpoint
+  namespace: Azure
+  label: Subnet Service Endpoints
+  menu_placement: AzureResource
+  display_label: service_name__value
+  uniqueness_constraints:
+  - - subnet
+    - service_key__value
+  attributes:
+  - name: service_name
+    label: Service
+    kind: Dropdown
+    optional: false
+    choices:
+    - name: Microsoft.Storage
+      label: Microsoft.Storage
+    - name: Microsoft.Storage.Global
+      label: Microsoft.Storage.Global
+    - name: Microsoft.Sql
+      label: Microsoft.Sql
+    - name: Microsoft.AzureCosmosDB
+      label: Microsoft.AzureCosmosDB
+    - name: Microsoft.KeyVault
+      label: Microsoft.KeyVault
+    - name: Microsoft.ServiceBus
+      label: Microsoft.ServiceBus
+    - name: Microsoft.EventHub
+      label: Microsoft.EventHub
+    - name: Microsoft.Web
+      label: Microsoft.Web
+    - name: Microsoft.CognitiveServices
+      label: Microsoft.CognitiveServices
+    - name: Microsoft.ContainerRegistry
+      label: Microsoft.ContainerRegistry
+  - name: service_key
+    label: Normalized Service
+    description: Scopes uniqueness to subnet; regional and global Storage share one
+      identity.
+    kind: Text
+    optional: false
+    read_only: true
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ service_name__value | lower | replace(''microsoft.storage.global'',
+        ''microsoft.storage'') }}'
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  relationships:
+  - name: subnet
+    peer: AzureVirtualNetworkSubnet
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_subnet__service_endpoints

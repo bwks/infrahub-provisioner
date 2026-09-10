@@ -12,6 +12,14 @@ from scripts import check_azure_networks as m
 @pytest.fixture
 def inventory():
     return {
+        "AzureSubnetDelegation": [
+            dict(
+                id="delegation",
+                name="service",
+                service_name="Microsoft.Test/service",
+                subnet="subnet",
+            )
+        ],
         "AzureTenant": [dict(id="tenant", name="tenant")],
         "AzureSubscription": [
             dict(id="subscription", name="subscription", tenant="tenant")
@@ -342,3 +350,35 @@ def test_empty_cli(monkeypatch):
     monkeypatch.setattr(m, "InfrahubClientSync", lambda: c)
     result = CliRunner().invoke(m.app, ["--branch", "test"])
     assert result.exit_code == 0 and "empty" in result.output
+
+
+@pytest.mark.parametrize("service", m.SERVICE_ENDPOINTS)
+def test_service_endpoint_options(inventory, service):
+    inventory["AzureSubnetServiceEndpoint"] = [
+        dict(id="endpoint", service_name=service, subnet="subnet")
+    ]
+    assert m.validate(inventory) == []
+
+
+@pytest.mark.parametrize("service", ["Microsoft.Unknown", "microsoft.storage", None])
+def test_unsupported_endpoint(inventory, service):
+    inventory["AzureSubnetServiceEndpoint"] = [
+        dict(id="endpoint", service_name=service, subnet="subnet")
+    ]
+    assert any("unsupported service endpoint" in f for f in m.validate(inventory))
+
+
+@pytest.mark.parametrize("second", ["Microsoft.Storage", "Microsoft.Storage.Global"])
+def test_endpoint_storage_conflicts(inventory, second):
+    inventory["AzureSubnetServiceEndpoint"] = [
+        dict(id="first", service_name="Microsoft.Storage", subnet="subnet"),
+        dict(id="second", service_name=second, subnet="subnet"),
+    ]
+    assert any("conflicting Storage" in f for f in m.validate(inventory))
+
+
+def test_endpoint_parent_required(inventory):
+    inventory["AzureSubnetServiceEndpoint"] = [
+        dict(id="endpoint", service_name="Microsoft.Sql", subnet="missing")
+    ]
+    assert any("endpoint" in f and "missing" in f for f in m.validate(inventory))

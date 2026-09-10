@@ -13,7 +13,8 @@ create-only seed workflows for Azure intent and cloud locations. Infrahub `main`
 contains the `fake-corp` tenant, 13 management groups, 12 subscriptions with Azure
 GUIDs pending, the 57-region reference catalog, and the planned Connectivity
 resource group `rg-conn-prd-network`, and its planned hub VNet `vnet-conn-prd-hub`
-using `10.150.0.0/24` in the default IP namespace. Subnets remain empty.
+using `10.150.0.0/24` in the default IP namespace, with six planned subnets
+and two DNS resolver delegations.
 
 The upstream base and VRF schemas are deployed on the lab’s `main` branch after
 validation and merge of `upstream-ipam`. No sample or operational objects were loaded during schema setup.
@@ -1029,10 +1030,9 @@ readiness, reserved-subnet feature compatibility, connectivity, or effective pol
 
 No Azure default rules, system routes, infrastructure records, or reference catalogs
 are created by this change. Default mapping, ASGs, NIC associations, ECMP, learned
-routes, subnet delegation, service endpoints, private-endpoint policies, effective
+routes, private-endpoint policies, effective
 routing/security evaluation, Azure synchronization, and deployment remain deferred.
-The hub VNet and its /24 allocation remain intact; choosing actual subnets is a
-separate seed task.
+The hub VNet and its /24 allocation remain intact; its subnet seed is documented below.
 
 Sources: [Azure naming rules](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules),
 [NSG rules](https://learn.microsoft.com/en-us/azure/templates/microsoft.network/networksecuritygroups/securityrules),
@@ -1066,6 +1066,138 @@ multi-value rule parsing, route validation, dual-stack containment, namespace an
 association conflicts, nested pagination, CLI failure behavior, and upstream hash
 verification. Ruff lint and formatting checks passed. No live scenario fixtures
 were created and no duplicate-write rejection tests were run against live data.
+
+## Hub subnets and service delegation
+
+`schemas/local/subnet_delegation.yml` adds optional owned `delegations` to subnets.
+Each `AzureSubnetDelegation` has a required name, service_name (for example
+`Microsoft.Network/dnsResolvers`), and parent subnet, with status defaulting to
+Planned. Computed read-only name_key and service_key enforce case-insensitive name
+and service uniqueness within the subnet. Delegations have no independent region,
+resource group, Azure GUID, or Azure tags. The model supports multiple service
+assignments where Azure permits them; syntax checks do not discover service
+availability or all service-specific restrictions.
+
+`check_azure_networks.py` additionally validates delegation ownership, service
+identifier syntax, duplicate services, and DNS resolver requirements: exclusive
+`Microsoft.Network/dnsResolvers` assignment with one IPv4 prefix sized /24–/28.
+This DNS-specific check is a read-only CLI gate. Delegation intent does not deploy
+Azure services or verify resolver endpoint configuration.
+
+The agreed catalog `data/azure_hub_subnets.yaml` fills the hub's `10.150.0.0/24`:
+
+| Subnet | Prefix | Delegation |
+| --- | --- | --- |
+| AzureFirewallSubnet | 10.150.0.0/26 | None |
+| AzureBastionSubnet | 10.150.0.64/26 | None |
+| GatewaySubnet | 10.150.0.128/27 | None |
+| snet-dns-inbound | 10.150.0.160/28 | Microsoft.Network/dnsResolvers |
+| snet-dns-outbound | 10.150.0.176/28 | Microsoft.Network/dnsResolvers |
+| snet-private-endpoints | 10.150.0.192/26 | None |
+
+All subnets start Planned; new prefixes start Reserved in the existing default
+namespace, as native children of `10.150.0.0/24`. The two named delegation records
+start Planned. No NSGs, routes, service endpoints, private-endpoint policy settings,
+or service instances are created. Dedicated subnet names and service assignment
+capture intent; this does not establish complete deployment readiness.
+
+`uv run python scripts/seed_azure_subnets.py --branch <branch>` previews; add
+`--apply` to create missing records or `--data` to select another YAML catalog.
+The catalog has a virtual_network selector (name, tenant, subscription,
+resource_group, namespace) and a subnets list (name, prefix, initial status,
+and delegations containing name/service_name). All selector dependencies must
+already exist and resolve uniquely. Delegation status defaults to Planned on
+creation; it is not a catalog-managed field.
+
+Before any writes, build and validate the entire projected network inventory.
+Reject name/prefix/delegation conflicts, subnet overlaps and containment errors,
+invalid DNS delegation, and incompatible existing prefix pool/VRF assignments.
+Existing extra delegations are conflicts, including on the undelegated private
+endpoint subnet. Missing delegations may be added to matching existing subnets.
+Create all missing prefixes first, then subnets, then delegations. Reruns preserve
+operational statuses, descriptions, NSG/route-table associations, tags, and unmanaged
+records; never move, overwrite, or delete objects. Partial writes are not rolled
+back; inspect and rerun with one writer. Exit 0 means valid preview/apply; 1 means
+invalid input, conflict, or read/write failure.
+
+References: [Azure delegation model](https://learn.microsoft.com/en-us/azure/templates/microsoft.network/virtualnetworks/subnets),
+[DNS resolver subnet requirements](https://learn.microsoft.com/en-us/azure/dns/dns-private-resolver-overview).
+
+Verified rollout commands:
+
+```sh
+uv run infrahubctl branch create hub-subnets
+uv run python scripts/check_schema.py --branch hub-subnets
+uv run infrahubctl schema load schemas --branch hub-subnets --wait 30
+uv run python scripts/verify_schema.py --branch hub-subnets
+uv run python scripts/seed_azure_subnets.py --branch hub-subnets
+uv run python scripts/seed_azure_subnets.py --branch hub-subnets --apply
+uv run python scripts/seed_azure_subnets.py --branch hub-subnets --apply
+uv run python scripts/check_azure_networks.py --branch hub-subnets
+INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge hub-subnets
+uv run python scripts/check_schema.py --branch main
+uv run python scripts/verify_schema.py --branch main
+uv run python scripts/seed_azure_subnets.py --branch main
+uv run python scripts/check_azure_networks.py --branch main
+```
+
+Compatibility checks passed without warnings, and unchanged schema reload required
+no changes. First apply created 14 records; the rerun created zero and matched all
+14. The initial merge reported a database connection error; reads confirmed the
+branch data remained intact, and a retry succeeded. Final `main` verification found
+an empty schema diff, six subnets, two delegations, and 26 IPAM prefixes. All new
+IDs matched the validation branch, and all six prefixes had the hub /24 as their
+native parent. Hub/IPAM seed previews and network/tag validation passed; existing
+IDs and tag values were preserved. All 473 offline tests and Ruff checks passed,
+including preflight conflicts, dependency errors, delegation syntax/uniqueness,
+DNS subnet constraints, partial-failure reruns, and operational-edit preservation.
+
+## Subnet service endpoints
+
+`schemas/local/subnet_service_endpoints.yml` adds an optional **Service Endpoints**
+relationship to Azure subnets. Open a subnet's relationship or
+`/objects/AzureSubnetServiceEndpoint` and create a selection with its parent subnet
+and required **Service** dropdown. Selections start Planned. No service endpoint
+selections are seeded or enabled by this change.
+
+The dropdown contains these Azure service identifiers:
+
+- `Microsoft.Storage` and `Microsoft.Storage.Global`
+- `Microsoft.Sql`
+- `Microsoft.AzureCosmosDB`
+- `Microsoft.KeyVault`
+- `Microsoft.ServiceBus`
+- `Microsoft.EventHub`
+- `Microsoft.Web`
+- `Microsoft.CognitiveServices`
+- `Microsoft.ContainerRegistry`
+
+The required, computed, read-only `service_key` scopes uniqueness to each subnet.
+Regional and global Storage share a key, preventing both from being selected on
+one subnet. The schema enforces the service choices, required parent, and scoped
+uniqueness on UI/API writes. `check_azure_networks.py` also reports unsupported
+services, missing parents, duplicate selections, and conflicting Storage endpoints.
+Subnet seed reruns preserve existing endpoint selections and validate them as part
+of the projected network inventory.
+
+This models classic service endpoint selections only. Per-endpoint location
+restrictions, service endpoint policies, network identifiers, and regional/service
+availability discovery are not implemented. Service endpoints and subnet delegation
+are separate settings. Service endpoints do not allocate private endpoint IPs;
+target-service firewall configuration and Azure deployment remain separate work.
+
+The service catalog was checked on 2026-09-10 against Microsoft's
+[service endpoint overview](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-service-endpoints-overview).
+The Storage exclusivity rule follows Microsoft's
+[Storage network security documentation](https://learn.microsoft.com/en-us/azure/storage/common/storage-network-security).
+
+The schema was validated and loaded on Infrahub branch `subnet-service-endpoints`,
+then merged to `main`. An unchanged branch reload and main schema check reported
+no changes. Schema, network, and tag verification passed on main; subnet, hub VNet,
+and IPAM seed previews found no missing records or conflicts. Main retains six
+subnets, two delegations, 26 prefixes, and zero endpoint selections. All 498 offline
+tests and Ruff checks passed, including endpoint choices, Storage exclusivity,
+missing parents, and seed preservation of operational selections.
 
 ## Source of truth and project boundaries
 

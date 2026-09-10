@@ -412,3 +412,41 @@ The fake-corp catalog is deployed to Infrahub `main` after validation and merge 
   Virtual Appliance. No ECMP, ASGs, default rules/system routes, effective-policy
   calculation, or Azure deployment. Keep fixtures offline and seed nothing until
   actual subnet/policy intent is explicitly requested.
+
+
+## Hub subnets and delegation
+
+- `data/azure_hub_subnets.yaml` owns the six agreed subnet names/ranges under the
+  existing hub /24. Two dns-resolver delegation records target
+  Microsoft.Network/dnsResolvers; the four other subnets remain undelegated.
+- `schemas/local/subnet_delegation.yml` supplies named AzureSubnetDelegation children
+  with service_name, parent subnet, Planned status, and computed case-insensitive
+  subnet-scoped name/service uniqueness. No duplicated region, group, GUID, or tags.
+- `uv run python scripts/seed_azure_subnets.py --branch <branch>` previews;
+  `--apply` creates missing prefixes, subnets, then delegations; `--data` selects YAML.
+  Validate the full projected network inventory before writes. Preserve operational
+  status, description, policy associations, and unmanaged records. Extra or changed
+  delegations conflict; missing desired assignments can be added. Never overwrite
+  or delete objects. Inspect partial writes and rerun with one writer.
+- Network validation adds service syntax/ownership/uniqueness and DNS-specific
+  exclusive delegation with one IPv4 /24–/28 prefix. Service availability and other
+  service-specific constraints remain undiscovered; these semantic checks are CLI
+  gates rather than automatic UI/API enforcement.
+- Keep the 19-prefix reference catalog and hub allocation catalog unchanged.
+  New subnet prefixes are Reserved; subnets/delegations start Planned. Seed no
+  NSGs, routes, private-endpoint policies, endpoints, or deployed Azure services.
+
+## Subnet service endpoints
+
+- `schemas/local/subnet_service_endpoints.yml` adds owned AzureSubnetServiceEndpoint
+  selections through subnet `service_endpoints`. The required service_name dropdown
+  contains ten classic Azure service identifiers verified on 2026-09-10; selections
+  default Planned, with no tags or separate name/GUID.
+- Required computed service_key lowercases the identifier and normalizes
+  Microsoft.Storage.Global to Microsoft.Storage. Schema uniqueness on subnet plus
+  service_key prevents duplicate selections and the mutually exclusive Storage
+  modes. Keep this normalization aligned with check_azure_networks.py.
+- The network CLI validates choices, parent references, and conflicts. Subnet seed
+  reruns preserve operational selections; no endpoint selections are in seed data.
+- Location restrictions, endpoint policies, network identifiers, service availability,
+  target-service firewall configuration, and Azure execution remain outside scope.

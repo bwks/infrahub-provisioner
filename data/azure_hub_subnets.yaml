@@ -1,0 +1,36 @@
+# Agreed hub subnet layout; all six ranges fill the existing 10.150.0.0/24.
+virtual_network:
+  name: vnet-conn-prd-hub
+  tenant: fake-corp
+  subscription: Connectivity
+  resource_group: rg-conn-prd-network
+  namespace: default
+subnets:
+  - name: AzureFirewallSubnet
+    prefix: 10.150.0.0/26
+    status: planned
+    delegations: []
+  - name: AzureBastionSubnet
+    prefix: 10.150.0.64/26
+    status: planned
+    delegations: []
+  - name: GatewaySubnet
+    prefix: 10.150.0.128/27
+    status: planned
+    delegations: []
+  - name: snet-dns-inbound
+    prefix: 10.150.0.160/28
+    status: planned
+    delegations:
+      - name: dns-resolver
+        service_name: Microsoft.Network/dnsResolvers
+  - name: snet-dns-outbound
+    prefix: 10.150.0.176/28
+    status: planned
+    delegations:
+      - name: dns-resolver
+        service_name: Microsoft.Network/dnsResolvers
+  - name: snet-private-endpoints
+    prefix: 10.150.0.192/26
+    status: planned
+    delegations: []

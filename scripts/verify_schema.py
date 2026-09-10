@@ -20,6 +20,8 @@ AZURE_NODES = (
     "AzureNetworkSecurityRule",
     "AzureRouteTable",
     "AzureRoute",
+    "AzureSubnetDelegation",
+    "AzureSubnetServiceEndpoint",
 )
 
 
@@ -115,6 +117,8 @@ def verify_azure(schemas) -> None:
             field == "address_space" and relationship.min_count != 1
         ):
             raise ValueError(f"AzureVirtualNetwork.{field} must be required")
+    verify_service_endpoints(schemas)
+    verify_subnet_delegation(schemas)
     verify_network_policy(schemas)
     group = schemas["AzureManagementGroup"]
     if (
@@ -176,6 +180,97 @@ def verify_azure(schemas) -> None:
             or relationship.cardinality != cardinality
         ):
             raise ValueError(f"{kind}.{name} must refer to {cardinality} {peer}")
+
+
+def verify_service_endpoints(schemas):
+    if __package__:
+        from .check_azure_networks import SERVICE_ENDPOINTS
+    else:
+        from check_azure_networks import SERVICE_ENDPOINTS
+    node = schemas["AzureSubnetServiceEndpoint"]
+    service = node.get_attribute_or_none("service_name")
+    if (
+        service is None
+        or service.kind != "Dropdown"
+        or service.optional
+        or {c["name"] for c in service.choices or []} != set(SERVICE_ENDPOINTS)
+    ):
+        raise ValueError(
+            "AzureSubnetServiceEndpoint.service_name must expose the supported service choices"
+        )
+    key = node.get_attribute_or_none("service_key")
+    if (
+        key is None
+        or key.kind != "Text"
+        or key.optional
+        or not key.read_only
+        or key.unique
+    ):
+        raise ValueError(
+            "AzureSubnetServiceEndpoint.service_key must be required read-only scoped Text"
+        )
+    if node.uniqueness_constraints != [["subnet", "service_key__value"]]:
+        raise ValueError(
+            "AzureSubnetServiceEndpoint uniqueness must be scoped to subnet and service"
+        )
+    owner = node.get_relationship("subnet")
+    reverse = schemas["AzureVirtualNetworkSubnet"].get_relationship("service_endpoints")
+    if (owner.peer, owner.kind, owner.cardinality, owner.optional) != (
+        "AzureVirtualNetworkSubnet",
+        "Parent",
+        "one",
+        False,
+    ):
+        raise ValueError("AzureSubnetServiceEndpoint.subnet must be a required parent")
+    if (reverse.peer, reverse.kind, reverse.cardinality, reverse.optional) != (
+        "AzureSubnetServiceEndpoint",
+        "Component",
+        "many",
+        True,
+    ) or owner.identifier != reverse.identifier:
+        raise ValueError(
+            "AzureVirtualNetworkSubnet.service_endpoints must expose owned selections"
+        )
+    if node.display_label != "service_name__value":
+        raise ValueError("AzureSubnetServiceEndpoint must display its service name")
+
+
+def verify_subnet_delegation(schemas):
+    node = schemas["AzureSubnetDelegation"]
+    for key in ("name_key", "service_key"):
+        a = node.get_attribute_or_none(key)
+        if a is None or a.kind != "Text" or a.optional or not a.read_only or a.unique:
+            raise ValueError(
+                f"AzureSubnetDelegation.{key} must be required read-only scoped Text"
+            )
+        if ["subnet", f"{key}__value"] not in (node.uniqueness_constraints or []):
+            raise ValueError(
+                f"AzureSubnetDelegation.{key} uniqueness must be subnet scoped"
+            )
+    for field in ("name", "service_name"):
+        a = node.get_attribute_or_none(field)
+        if a is None or a.kind != "Text" or a.optional or not a.regex:
+            raise ValueError(
+                f"AzureSubnetDelegation.{field} must be required validated Text"
+            )
+    forward = node.get_relationship("subnet")
+    reverse = schemas["AzureVirtualNetworkSubnet"].get_relationship("delegations")
+    if (forward.peer, forward.kind, forward.cardinality, forward.optional) != (
+        "AzureVirtualNetworkSubnet",
+        "Parent",
+        "one",
+        False,
+    ):
+        raise ValueError("AzureSubnetDelegation.subnet must be a required parent")
+    if (reverse.peer, reverse.kind, reverse.cardinality, reverse.optional) != (
+        "AzureSubnetDelegation",
+        "Component",
+        "many",
+        True,
+    ) or forward.identifier != reverse.identifier:
+        raise ValueError(
+            "AzureVirtualNetworkSubnet.delegations must expose owned delegations"
+        )
 
 
 def verify_network_policy(schemas):

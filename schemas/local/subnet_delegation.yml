@@ -1,0 +1,89 @@
+# Repository-owned named Azure subnet service delegations.
+version: '1.0'
+nodes:
+- name: VirtualNetworkSubnet
+  namespace: Azure
+  relationships:
+  - name: delegations
+    peer: AzureSubnetDelegation
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_subnet__delegations
+- name: SubnetDelegation
+  namespace: Azure
+  label: Subnet Delegations
+  menu_placement: AzureResource
+  display_label: '{{ name__value }} ({{ service_name__value }})'
+  uniqueness_constraints:
+  - - subnet
+    - name_key__value
+  - - subnet
+    - service_key__value
+  attributes:
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: service_name
+    label: Delegated Service
+    kind: Text
+    optional: false
+    parameters:
+      regex: ^[A-Za-z][A-Za-z0-9.]*/[A-Za-z][A-Za-z0-9]*(?:/[A-Za-z][A-Za-z0-9]*)*\Z
+    description: Azure service identifier, for example Microsoft.Network/dnsResolvers;
+      availability is not discovered automatically.
+  - name: service_key
+    label: Normalized Service
+    kind: Text
+    optional: false
+    read_only: true
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ service_name__value | lower }}'
+  relationships:
+  - name: subnet
+    peer: AzureVirtualNetworkSubnet
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_subnet__delegations

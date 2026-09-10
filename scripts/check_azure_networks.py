@@ -11,7 +11,24 @@ from infrahub_sdk import InfrahubClientSync
 app = typer.Typer(help=__doc__, add_completion=False, pretty_exceptions_enable=False)
 NAME_RE = r"^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z"
 SERVICE_TAG_RE = r"[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*"
+DELEGATION_SERVICE_RE = (
+    "^[A-Za-z][A-Za-z0-9.]*/[A-Za-z][A-Za-z0-9]*(?:/[A-Za-z][A-Za-z0-9]*)*\\Z"
+)
+SERVICE_ENDPOINTS = (
+    "Microsoft.Storage",
+    "Microsoft.Storage.Global",
+    "Microsoft.Sql",
+    "Microsoft.AzureCosmosDB",
+    "Microsoft.KeyVault",
+    "Microsoft.ServiceBus",
+    "Microsoft.EventHub",
+    "Microsoft.Web",
+    "Microsoft.CognitiveServices",
+    "Microsoft.ContainerRegistry",
+)
+DNS_SERVICE = "microsoft.network/dnsresolvers"
 PARENTS = {
+    "AzureSubnetDelegation": ("subnet", "AzureVirtualNetworkSubnet"),
     "AzureVirtualNetwork": ("resourcegroup", "AzureResourceGroup"),
     "AzureVirtualNetworkSubnet": ("virtualnetwork", "AzureVirtualNetwork"),
     "AzureNetworkSecurityGroup": ("resourcegroup", "AzureResourceGroup"),
@@ -21,6 +38,8 @@ PARENTS = {
 }
 # Attribute and single-peer fields to read. Prefix relationships are paginated separately.
 FIELDS = {
+    "AzureSubnetServiceEndpoint": (["service_name"], ["subnet"]),
+    "AzureSubnetDelegation": (["name", "service_name"], ["subnet"]),
     "AzureSubscription": (["name"], ["tenant"]),
     "AzureTenant": (["name"], []),
     "AzureRegion": (["name"], []),
@@ -271,6 +290,58 @@ def validate(inventory):
                 issue(kind, n, "Virtual Appliance requires a valid next_hop_ip_address")
         elif address is not None:
             issue(kind, n, "next_hop_ip_address is only allowed for Virtual Appliance")
+    services = set()
+    by_subnet = defaultdict(list)
+    for n in inventory.get("AzureSubnetDelegation", []):
+        service = n.get("service_name")
+        if not isinstance(service, str) or not re.fullmatch(
+            DELEGATION_SERVICE_RE, service
+        ):
+            issue("AzureSubnetDelegation", n, "invalid delegated service identifier")
+            continue
+        identity = (n.get("subnet"), service.lower())
+        if identity in services:
+            issue(
+                "AzureSubnetDelegation", n, "duplicate service delegation within subnet"
+            )
+        services.add(identity)
+        by_subnet[n.get("subnet")].append(service.lower())
+    for subnet_id, services in by_subnet.items():
+        if DNS_SERVICE not in services:
+            continue
+        subnet = indexes["AzureVirtualNetworkSubnet"].get(subnet_id)
+        if subnet is None:
+            continue
+        values = ranges("AzureVirtualNetworkSubnet", subnet, "address_prefixes")
+        if (
+            len(services) != 1
+            or len(values) != 1
+            or any(p.version != 4 or not 24 <= p.prefixlen <= 28 for _, p, _ in values)
+        ):
+            issue(
+                "AzureVirtualNetworkSubnet",
+                subnet,
+                "DNS resolver requires one IPv4 /24–/28 prefix and exclusive Microsoft.Network/dnsResolvers delegation",
+            )
+    endpoint_services = {}
+    for n in inventory.get("AzureSubnetServiceEndpoint", []):
+        kind = "AzureSubnetServiceEndpoint"
+        reference(kind, n, "subnet", "AzureVirtualNetworkSubnet")
+        service = n.get("service_name")
+        if service not in SERVICE_ENDPOINTS:
+            issue(kind, n, f"unsupported service endpoint {service!r}")
+        if isinstance(service, str):
+            key = service.lower().replace(
+                "microsoft.storage.global", "microsoft.storage"
+            )
+            identity = (n.get("subnet"), key)
+            if identity in endpoint_services:
+                issue(
+                    kind,
+                    n,
+                    f"duplicate service or conflicting Storage endpoints with {endpoint_services[identity]}",
+                )
+            endpoint_services[identity] = n["id"]
     return findings
 
 
@@ -300,7 +371,7 @@ def prefix_ids(client, branch, kind, id_, field):
             raise ValueError("Incomplete prefix connection read")
 
 
-def check(client, branch):
+def read_inventory(client, branch):
     inventory = {}
     for kind, (attrs, peers) in FIELDS.items():
         inventory[kind] = []
@@ -319,6 +390,11 @@ def check(client, branch):
             if field:
                 row[field] = prefix_ids(client, branch, kind, n.id, field)
             inventory[kind].append(row)
+    return inventory
+
+
+def check(client, branch):
+    inventory = read_inventory(client, branch)
     findings = validate(inventory)
     for finding in findings:
         typer.echo(finding, err=True)
@@ -328,7 +404,7 @@ def check(client, branch):
             err=True,
         )
         return 1
-    count = sum(len(inventory[k]) for k in PARENTS)
+    count = sum(len(inventory[k]) for k in (*PARENTS, "AzureSubnetServiceEndpoint"))
     typer.echo(
         f"Azure networks valid on branch {branch}: {count} network objects."
         + (" Network inventory is empty." if not count else "")

@@ -21,6 +21,8 @@ def schemas():
         Path("schemas/local/cloud_locations.yml"),
         Path("schemas/local/network_policy.yml"),
         Path("schemas/local/resource_tags.yml"),
+        Path("schemas/local/subnet_delegation.yml"),
+        Path("schemas/local/subnet_service_endpoints.yml"),
         Path("schemas/local/virtual_networks.yml"),
     ):
         data = yaml.safe_load(path.read_text())
@@ -706,3 +708,69 @@ def test_network_tag_owners(schemas, kind):
         validate([Tag("tag", "Environment", "Production", "owner")], {"owner": kind})
         == []
     )
+
+
+@pytest.mark.parametrize("edit", ["scope", "writable", "service", "relationship"])
+def test_subnet_delegation_contract(schemas, edit):
+    node = schemas["AzureSubnetDelegation"]
+    if edit == "scope":
+        node.uniqueness_constraints = []
+    elif edit == "writable":
+        node.get_attribute("service_key").read_only = False
+    elif edit == "service":
+        node.get_attribute("service_name").optional = True
+    else:
+        node.get_relationship("subnet").optional = True
+    with pytest.raises(ValueError, match="AzureSubnetDelegation"):
+        verify_azure(schemas)
+
+
+def test_delegation_normalization():
+    from jinja2 import Environment
+
+    node = yaml.safe_load(Path("schemas/local/subnet_delegation.yml").read_text())[
+        "nodes"
+    ][1]
+    key = next(a for a in node["attributes"] if a["name"] == "service_key")
+    template = Environment().from_string(key["computed_attribute"]["jinja2_template"])
+    assert (
+        template.render(service_name__value="Microsoft.Network/dnsResolvers")
+        == "microsoft.network/dnsresolvers"
+    )
+
+
+@pytest.mark.parametrize(
+    "edit", ["scope", "writable", "service", "relationship", "choices"]
+)
+def test_subnet_endpoint_contract(schemas, edit):
+    node = schemas["AzureSubnetServiceEndpoint"]
+    if edit == "scope":
+        node.uniqueness_constraints = []
+    elif edit == "writable":
+        node.get_attribute("service_key").read_only = False
+    elif edit == "service":
+        node.get_attribute("service_name").optional = True
+    elif edit == "choices":
+        node.get_attribute("service_name").choices = []
+    else:
+        node.get_relationship("subnet").optional = True
+    with pytest.raises(ValueError, match="AzureSubnetServiceEndpoint"):
+        verify_azure(schemas)
+
+
+def test_endpoint_storage_family_uniqueness():
+    from jinja2 import Environment
+    from scripts.check_azure_networks import SERVICE_ENDPOINTS
+
+    node = yaml.safe_load(
+        Path("schemas/local/subnet_service_endpoints.yml").read_text()
+    )["nodes"][1]
+    key = next(a for a in node["attributes"] if a["name"] == "service_key")
+    template = Environment().from_string(key["computed_attribute"]["jinja2_template"])
+    keys = {s: template.render(service_name__value=s) for s in SERVICE_ENDPOINTS}
+    assert (
+        keys["Microsoft.Storage"]
+        == keys["Microsoft.Storage.Global"]
+        == "microsoft.storage"
+    )
+    assert len(set(keys.values())) == len(SERVICE_ENDPOINTS) - 1
