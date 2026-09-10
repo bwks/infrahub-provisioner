@@ -1,0 +1,151 @@
+# One intent connection represents both directional Azure peering resources.
+version: '1.0'
+nodes:
+- name: VirtualNetwork
+  namespace: Azure
+  relationships:
+  - name: peerings_a
+    label: Peerings as End A
+    peer: AzureVirtualNetworkPeering
+    kind: Generic
+    cardinality: many
+    optional: true
+    identifier: azure_vnet__peerings_a
+  - name: peerings_b
+    label: Peerings as End B
+    peer: AzureVirtualNetworkPeering
+    kind: Generic
+    cardinality: many
+    optional: true
+    identifier: azure_vnet__peerings_b
+- name: VirtualNetworkPeering
+  namespace: Azure
+  label: VNet Peerings
+  menu_placement: AzureResource
+  display_label: '{{ peering_name_a__value }} ↔ {{ peering_name_b__value }}'
+  uniqueness_constraints:
+  - - virtual_network_a
+    - virtual_network_b
+  attributes:
+  - name: description
+    kind: Text
+    optional: true
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: peering_name_a
+    label: End A Peering Name
+    kind: Text
+    optional: false
+    order_weight: 101
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: a_allow_virtual_network_access
+    label: 'End A: Allow VNet Access'
+    kind: Boolean
+    optional: false
+    default_value: true
+    description: Allow access between this VNet and the opposite VNet.
+    order_weight: 102
+  - name: a_allow_forwarded_traffic
+    label: 'End A: Allow Forwarded Traffic'
+    kind: Boolean
+    optional: false
+    default_value: false
+    description: Allow this VNet to receive forwarded traffic from the opposite VNet.
+    order_weight: 103
+  - name: a_allow_gateway_transit
+    label: 'End A: Allow Gateway Transit'
+    kind: Boolean
+    optional: false
+    default_value: false
+    description: Allow the opposite VNet to use this end’s gateway.
+    order_weight: 104
+  - name: a_use_remote_gateways
+    label: 'End A: Use Remote Gateways'
+    kind: Boolean
+    optional: false
+    default_value: false
+    description: Use the opposite end’s gateway.
+    order_weight: 105
+  - name: peering_name_b
+    label: End B Peering Name
+    kind: Text
+    optional: false
+    order_weight: 201
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: b_allow_virtual_network_access
+    label: 'End B: Allow VNet Access'
+    kind: Boolean
+    optional: false
+    default_value: true
+    description: Allow access between this VNet and the opposite VNet.
+    order_weight: 202
+  - name: b_allow_forwarded_traffic
+    label: 'End B: Allow Forwarded Traffic'
+    kind: Boolean
+    optional: false
+    default_value: false
+    description: Allow this VNet to receive forwarded traffic from the opposite VNet.
+    order_weight: 203
+  - name: b_allow_gateway_transit
+    label: 'End B: Allow Gateway Transit'
+    kind: Boolean
+    optional: false
+    default_value: false
+    description: Allow the opposite VNet to use this end’s gateway.
+    order_weight: 204
+  - name: b_use_remote_gateways
+    label: 'End B: Use Remote Gateways'
+    kind: Boolean
+    optional: false
+    default_value: false
+    description: Use the opposite end’s gateway.
+    order_weight: 205
+  relationships:
+  - name: virtual_network_a
+    label: End A VNet
+    peer: AzureVirtualNetwork
+    kind: Attribute
+    cardinality: one
+    optional: false
+    identifier: azure_vnet__peerings_a
+    order_weight: 100
+  - name: virtual_network_b
+    label: End B VNet
+    peer: AzureVirtualNetwork
+    kind: Attribute
+    cardinality: one
+    optional: false
+    identifier: azure_vnet__peerings_b
+    order_weight: 200

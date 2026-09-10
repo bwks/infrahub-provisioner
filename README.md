@@ -1199,6 +1199,86 @@ subnets, two delegations, 26 prefixes, and zero endpoint selections. All 498 off
 tests and Ruff checks passed, including endpoint choices, Storage exclusivity,
 missing parents, and seed preservation of operational selections.
 
+## Paired VNet peering
+
+`schemas/local/virtual_network_peering.yml` adds **VNet Peerings** at
+`/objects/AzureVirtualNetworkPeering`. Each record represents one connection, with
+required **End A VNet** and **End B VNet**, an Azure peering name for each end,
+an optional description, and a shared status defaulting to Planned. On a VNet,
+**Peerings as End A** and **Peerings as End B** expose the corresponding connections.
+Both ends are references; neither exclusively owns the connection.
+
+Each end has four independent settings:
+
+| Setting | Default | Meaning at this end |
+| --- | --- | --- |
+| Allow VNet Access | Enabled | Allow access between the two VNets |
+| Allow Forwarded Traffic | Disabled | Receive forwarded traffic from the opposite VNet |
+| Allow Gateway Transit | Disabled | Share this end's gateway with the opposite VNet |
+| Use Remote Gateways | Disabled | Use the opposite end's gateway |
+
+A future deployment consumer must translate the A fields into a peering under
+VNet A targeting B, and the B fields into a peering under B targeting A. This
+repository performs no Azure deployment or synchronization. There is no separate
+connection GUID, HFID, AzureResource inheritance, or tag support.
+
+Schema enforcement covers required fields, Boolean defaults, Azure peering name
+syntax (1–80 characters), and ordered VNet-pair uniqueness. The read-only network
+gate additionally rejects self-peering, missing VNets, reversed duplicate pairs,
+case-insensitive name collisions within a VNet across either end position, and
+IPv4/IPv6 address-space overlap regardless of IPAM namespace. Remote gateway use
+requires gateway transit on the opposite end; both ends cannot use each other's
+gateway, and each VNet may use a remote gateway through at most one connection.
+These CLI checks apply to Planned records too; they do not automatically block
+UI/API edits. Independent traffic settings need not match.
+
+Infrahub reports the peering's defaulted Boolean attributes as optional after
+schema normalization, despite `optional: false` in YAML. The verifier accepts
+this server representation while checking exact defaults. The network gate
+requires an actual Boolean value for all eight settings and rejects null values.
+
+Different regions, subscriptions, and tenants are allowed. Gateway existence,
+permissions, cloud compatibility, and deployment readiness remain unverified.
+Subnet peering, Azure synchronization, and peering seed data are outside this step.
+Existing seed workflows preserve unmanaged connection records and include them in
+network validation where that gate is used.
+
+References: [Azure peering configuration](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-manage-peering),
+[Azure naming rules](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules).
+
+Peering rollout completed on 2026-09-10. The schema was validated and loaded on
+`vnet-peering`, with an unchanged reload and branch schema/network/tag checks and
+seed previews passing. All 523 offline tests and Ruff checks passed, including
+upstream hash verification. No peerings were created.
+
+The merge flow crashed after missing heartbeats, leaving `vnet-peering` in
+`MERGING` and workers with inconsistent schema hashes. Following the user's
+explicit recovery request, both merge tasks were confirmed CRASHED. A snapshot
+outside the repository confirmed all 130 modeled Azure/IPAM/Location objects had
+matching IDs, attributes, and relationships on main and the branch. The failed
+branch was then deleted through Infrahub's API. A main schema check and load found
+the schema already current; this indicates the failed merge had persisted the
+schema despite its stale state. No direct database changes or server restarts were
+needed. This specific recovery is not a general instruction to delete merging
+branches: confirm terminal task state and preserve and compare branch data first.
+
+Main now passes schema, network, and tag verification. Subnet, VNet, and IPAM seed
+previews report no missing records or conflicts. All 130 original objects match
+the recovery snapshot, including all six subnets and 26 prefixes. The peering
+count is zero, no branches remain MERGING, and all six active workers agree on the
+schema hash (`schema_hash_synced: true`). Verified main commands:
+
+```sh
+uv run python scripts/check_schema.py --branch main
+uv run infrahubctl schema load schemas --branch main --wait 30
+uv run python scripts/verify_schema.py --branch main
+uv run python scripts/check_azure_networks.py --branch main
+uv run python scripts/check_azure_tags.py --branch main
+uv run python scripts/seed_azure_subnets.py --branch main
+uv run python scripts/seed_azure_virtual_network.py --branch main
+uv run python scripts/seed_ipam.py --branch main
+```
+
 ## Source of truth and project boundaries
 
 Git holds schema definitions and bootstrap configuration. Infrahub holds operational

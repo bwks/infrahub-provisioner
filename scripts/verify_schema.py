@@ -22,6 +22,7 @@ AZURE_NODES = (
     "AzureRoute",
     "AzureSubnetDelegation",
     "AzureSubnetServiceEndpoint",
+    "AzureVirtualNetworkPeering",
 )
 
 
@@ -117,6 +118,7 @@ def verify_azure(schemas) -> None:
             field == "address_space" and relationship.min_count != 1
         ):
             raise ValueError(f"AzureVirtualNetwork.{field} must be required")
+    verify_peering(schemas)
     verify_service_endpoints(schemas)
     verify_subnet_delegation(schemas)
     verify_network_policy(schemas)
@@ -180,6 +182,64 @@ def verify_azure(schemas) -> None:
             or relationship.cardinality != cardinality
         ):
             raise ValueError(f"{kind}.{name} must refer to {cardinality} {peer}")
+
+
+def verify_peering(schemas):
+    node = schemas["AzureVirtualNetworkPeering"]
+    if node.inherit_from or node.uniqueness_constraints != [
+        ["virtual_network_a", "virtual_network_b"]
+    ]:
+        raise ValueError(
+            "AzureVirtualNetworkPeering must be independent with ordered-pair uniqueness"
+        )
+    if (
+        node.display_label
+        != "{{ peering_name_a__value }} ↔ {{ peering_name_b__value }}"
+    ):
+        raise ValueError("AzureVirtualNetworkPeering must display both names")
+    identifiers = set()
+    for side in "ab":
+        name = node.get_attribute(f"peering_name_{side}")
+        if (
+            name.kind != "Text"
+            or name.optional
+            or name.unique
+            or name.min_length != 1
+            or name.max_length != 80
+            or name.regex != r"^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z"
+        ):
+            raise ValueError(
+                "AzureVirtualNetworkPeering names must enforce Azure naming rules"
+            )
+        for option in (
+            "allow_virtual_network_access",
+            "allow_forwarded_traffic",
+            "allow_gateway_transit",
+            "use_remote_gateways",
+        ):
+            attr = node.get_attribute(f"{side}_{option}")
+            # Infrahub normalizes defaulted attributes to optional on read.
+            if attr.kind != "Boolean" or attr.default_value is not (
+                option == "allow_virtual_network_access"
+            ):
+                raise ValueError(
+                    f"AzureVirtualNetworkPeering.{side}_{option} has invalid definition/default"
+                )
+        peer = node.get_relationship(f"virtual_network_{side}")
+        reverse = schemas["AzureVirtualNetwork"].get_relationship(f"peerings_{side}")
+        if (
+            (peer.peer, peer.kind, peer.cardinality, peer.optional)
+            != ("AzureVirtualNetwork", "Attribute", "one", False)
+            or (reverse.peer, reverse.kind, reverse.cardinality, reverse.optional)
+            != ("AzureVirtualNetworkPeering", "Generic", "many", True)
+            or peer.identifier != reverse.identifier
+        ):
+            raise ValueError(
+                "AzureVirtualNetworkPeering requires reciprocal VNet references"
+            )
+        identifiers.add(peer.identifier)
+    if len(identifiers) != 2:
+        raise ValueError("AzureVirtualNetworkPeering end identifiers must differ")
 
 
 def verify_service_endpoints(schemas):

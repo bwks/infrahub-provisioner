@@ -368,7 +368,7 @@ The fake-corp catalog is deployed to Infrahub `main` after validation and merge 
   and uniqueness compliance. Migrate populated deployments deliberately; never
   invent address space or bypass required relationships to load a schema.
 - Schema constraints do not validate address overlap, subnet containment, or Azure
-  deployment readiness. DNS, peering, further subnet configuration, identifiers, allocation,
+  deployment readiness. DNS, further subnet configuration, identifiers, allocation,
   seeding, and deployment remain deferred. Keep scenario fixtures offline.
 
 
@@ -450,3 +450,36 @@ The fake-corp catalog is deployed to Infrahub `main` after validation and merge 
   reruns preserve operational selections; no endpoint selections are in seed data.
 - Location restrictions, endpoint policies, network identifiers, service availability,
   target-service firewall configuration, and Azure execution remain outside scope.
+
+## Paired VNet peering
+
+- `schemas/local/virtual_network_peering.yml` defines AzureVirtualNetworkPeering:
+  one intent connection with required virtual_network_a/b, peering_name_a/b and
+  four required Boolean settings per end, plus optional description and shared
+  Planned status. VNet access defaults true; other settings default false.
+- VNet peerings_a/b reverse relationships reference the two end positions. Neither
+  end is a Parent/Component owner. No AzureResource/AzureTaggable inheritance, HFID,
+  or GUID requirement. Consumers must map each record into two Azure resources.
+- Schema enforces ordered-pair uniqueness and name syntax. Network CLI checks
+  unordered pairs, self-peering, required references, names scoped to the local
+  VNet across both end positions, and address-space overlap across IPAM namespaces.
+- Remote gateway use requires opposite-end gateway transit; reject both ends using
+  remote gateways and a VNet selecting multiple remote gateways across connections.
+  Apply CLI checks to all statuses. Do not assume traffic settings are symmetric.
+- Allow cross-region/subscription/tenant connections. Actual gateways, permissions,
+  cloud compatibility, deployment readiness, subnet peering, and synchronization
+  are outside scope. Seed no peerings or new VNets without explicit user intent.
+
+Infrahub reports the peering's defaulted Boolean attributes as optional after
+schema normalization, despite `optional: false` in YAML. The verifier accepts
+this server representation while checking exact defaults. The network gate
+requires an actual Boolean value for all eight settings and rejects null values.
+
+- Peering rollout recovered on 2026-09-10 after explicit user authorization. Both
+  merge tasks were CRASHED while the branch remained MERGING. After snapshotting
+  and comparing all 130 modeled objects (IDs, attributes, relationships) with main,
+  the failed branch was deleted through the API. Main then had an empty schema
+  diff and unchanged reload; verification and seed previews passed, no MERGING
+  branches remained, and active-worker schema hashes agreed. No database edits or
+  server restarts were performed. Do not generalize this into deleting merging
+  branches without confirming terminal task state and preserving branch data.

@@ -24,6 +24,7 @@ def schemas():
         Path("schemas/local/subnet_delegation.yml"),
         Path("schemas/local/subnet_service_endpoints.yml"),
         Path("schemas/local/virtual_networks.yml"),
+        Path("schemas/local/virtual_network_peering.yml"),
     ):
         data = yaml.safe_load(path.read_text())
         for section in ("generics", "nodes"):
@@ -774,3 +775,45 @@ def test_endpoint_storage_family_uniqueness():
         == "microsoft.storage"
     )
     assert len(set(keys.values())) == len(SERVICE_ENDPOINTS) - 1
+
+
+@pytest.mark.parametrize(
+    "edit",
+    ["scope", "name", "default", "boolean", "parent", "reverse", "inherit", "display"],
+)
+def test_peering_contract(schemas, edit):
+    node = schemas["AzureVirtualNetworkPeering"]
+    if edit == "scope":
+        node.uniqueness_constraints = []
+    elif edit == "name":
+        node.get_attribute("peering_name_a").max_length = 81
+    elif edit == "default":
+        node.get_attribute("b_allow_forwarded_traffic").default_value = True
+    elif edit == "boolean":
+        node.get_attribute("a_use_remote_gateways").kind = "Text"
+    elif edit == "parent":
+        node.get_relationship("virtual_network_a").optional = True
+    elif edit == "reverse":
+        schemas["AzureVirtualNetwork"].get_relationship(
+            "peerings_b"
+        ).identifier = "wrong"
+    elif edit == "inherit":
+        node.inherit_from = ["AzureResource"]
+    else:
+        node.display_label = "peering_name_a__value"
+    with pytest.raises(ValueError, match="AzureVirtualNetworkPeering"):
+        verify_azure(schemas)
+
+
+def test_peering_server_normalized_defaults(schemas):
+    node = schemas["AzureVirtualNetworkPeering"]
+    for attr in node.attributes:
+        if attr.kind == "Boolean":
+            attr.optional = True
+    verify_azure(schemas)
+    source = yaml.safe_load(
+        Path("schemas/local/virtual_network_peering.yml").read_text()
+    )["nodes"][1]
+    assert all(
+        a["optional"] is False for a in source["attributes"] if a["kind"] == "Boolean"
+    )

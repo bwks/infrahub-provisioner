@@ -26,6 +26,13 @@ SERVICE_ENDPOINTS = (
     "Microsoft.CognitiveServices",
     "Microsoft.ContainerRegistry",
 )
+PEERING_OPTIONS = (
+    "allow_virtual_network_access",
+    "allow_forwarded_traffic",
+    "allow_gateway_transit",
+    "use_remote_gateways",
+)
+PEERING_KIND = "AzureVirtualNetworkPeering"
 DNS_SERVICE = "microsoft.network/dnsresolvers"
 PARENTS = {
     "AzureSubnetDelegation": ("subnet", "AzureVirtualNetworkSubnet"),
@@ -38,6 +45,11 @@ PARENTS = {
 }
 # Attribute and single-peer fields to read. Prefix relationships are paginated separately.
 FIELDS = {
+    PEERING_KIND: (
+        ["peering_name_a", "peering_name_b"]
+        + [f"{side}_{option}" for side in "ab" for option in PEERING_OPTIONS],
+        ["virtual_network_a", "virtual_network_b"],
+    ),
     "AzureSubnetServiceEndpoint": (["service_name"], ["subnet"]),
     "AzureSubnetDelegation": (["name", "service_name"], ["subnet"]),
     "AzureSubscription": (["name"], ["tenant"]),
@@ -193,6 +205,7 @@ def validate(inventory):
         n["id"]: ranges("AzureVirtualNetwork", n, "address_space")
         for n in inventory.get("AzureVirtualNetwork", [])
     }
+    findings.extend(validate_peerings(inventory, vnet_ranges))
     siblings = defaultdict(list)
     for n in inventory.get("AzureVirtualNetworkSubnet", []):
         kind = "AzureVirtualNetworkSubnet"
@@ -345,6 +358,66 @@ def validate(inventory):
     return findings
 
 
+def validate_peerings(inventory, vnet_ranges):
+    """Validate paired intent, independent of endpoint orientation and IPAM namespace."""
+    findings = []
+    pairs, names, remote_users = {}, {}, {}
+    vnets = {n["id"]: n for n in inventory.get("AzureVirtualNetwork", [])}
+    for n in inventory.get(PEERING_KIND, []):
+        ends = {side: n.get(f"virtual_network_{side}") for side in "ab"}
+
+        def issue(message):
+            findings.append(
+                f"{PEERING_KIND} {n['id']} (A={ends['a']}, B={ends['b']}): {message}"
+            )
+
+        if ends["a"] == ends["b"]:
+            issue("self-peering is not allowed")
+        pair = frozenset(ends.values())
+        if pair in pairs:
+            issue(f"duplicate VNet pair with {pairs[pair]}")
+        pairs[pair] = n["id"]
+        for side, vnet in ends.items():
+            opposite = "b" if side == "a" else "a"
+            if vnet not in vnets:
+                issue(f"end {side}: missing VNet {vnet}")
+            name = n.get(f"peering_name_{side}")
+            if (
+                not isinstance(name, str)
+                or not 1 <= len(name) <= 80
+                or not re.fullmatch(NAME_RE, name)
+            ):
+                issue(f"end {side}: invalid Azure peering name {name!r}")
+            else:
+                identity = (vnet, name.lower())
+                if identity in names:
+                    issue(f"end {side}: duplicate peering name with {names[identity]}")
+                names[identity] = n["id"]
+            for option in PEERING_OPTIONS:
+                if type(n.get(f"{side}_{option}")) is not bool:
+                    issue(f"{side}_{option} must be Boolean")
+            if n.get(f"{side}_use_remote_gateways") is True:
+                if n.get(f"{opposite}_allow_gateway_transit") is not True:
+                    issue(
+                        f"end {side}: remote gateway use requires gateway transit on end {opposite}"
+                    )
+                if vnet in remote_users:
+                    issue(
+                        f"VNet {vnet} uses remote gateways through multiple connections including {remote_users[vnet]}"
+                    )
+                remote_users[vnet] = n["id"]
+        if (
+            n.get("a_use_remote_gateways") is True
+            and n.get("b_use_remote_gateways") is True
+        ):
+            issue("both ends cannot use remote gateways")
+        for _, a, _ in vnet_ranges.get(ends["a"], []):
+            for _, b, _ in vnet_ranges.get(ends["b"], []):
+                if a.version == b.version and a.overlaps(b):
+                    issue(f"overlapping VNet address spaces: {a} and {b}")
+    return findings
+
+
 def prefix_ids(client, branch, kind, id_, field):
     """Page nested prefix connections too: SDK all() only pages top-level nodes."""
     result = []
@@ -404,7 +477,10 @@ def check(client, branch):
             err=True,
         )
         return 1
-    count = sum(len(inventory[k]) for k in (*PARENTS, "AzureSubnetServiceEndpoint"))
+    count = sum(
+        len(inventory[k])
+        for k in (*PARENTS, "AzureSubnetServiceEndpoint", PEERING_KIND)
+    )
     typer.echo(
         f"Azure networks valid on branch {branch}: {count} network objects."
         + (" Network inventory is empty." if not count else "")
