@@ -1279,6 +1279,58 @@ uv run python scripts/seed_azure_virtual_network.py --branch main
 uv run python scripts/seed_ipam.py --branch main
 ```
 
+## Azure navigation
+
+`menus/azure.yml` owns the Azure menu layout independently of resource names,
+relationships, and object routes:
+
+| Group | Menu links, in order |
+| --- | --- |
+| Organization | Tenants, Management Groups, Subscriptions, Resource Groups |
+| Networking | Virtual Networks, VNet Peerings, Subnets, Network Security Groups, Route Tables |
+| Reference | Regions, Tags |
+
+The Management Groups link opens `/objects/AzureManagementGroupHierarchy`, keeping
+the native tree view. Individual security rules, routes, subnet delegations, and
+service endpoints are accessible through their parent objects and direct URLs.
+They are omitted from the Azure sidebar. Region and Azure tag links refer to the
+existing Azure models. Built-in IPAM, location/organization navigation, and the
+fixed internal navigation retain their existing layout.
+
+`schemas/local/azure_menu.yml` disables automatic menu entries for Azure types
+only. Vendored schemas stay unchanged. New Azure types should declare their menu
+visibility in this local extension and, when appropriate, receive an entry in the
+menu file. Do not disable automatic entries for unrelated schemas.
+
+Menu items use stable namespace/name identities under `Azuremenu`; the YAML loader
+upserts these owned navigation records. Existing built-in menu items are not
+managed by this file. Removing an entry from YAML does not automatically delete
+its existing CoreMenuItem; reconcile intentional removals explicitly. Menu files
+are separate from schema discovery and must be loaded separately:
+
+```sh
+uv run python scripts/check_schema.py --branch <branch>
+uv run infrahubctl schema load schemas --branch <branch> --wait 30
+uv run infrahubctl menu validate menus/azure.yml --branch <branch>
+uv run infrahubctl menu load menus/azure.yml --branch <branch>
+uv run python scripts/verify_schema.py --branch <branch>
+```
+
+Menu records are branch-aware. Validate on a dedicated branch before applying the
+same schema and menu files to main. The menu validator checks file structure;
+verify the resulting `/api/menu?branch=<branch>` response too, including nesting,
+unique links, and the `/ipam` route. No resource seed data is changed by this workflow.
+
+Validated on `azure-menu` and applied to main on 2026-09-10 using the schema and
+menu loaders. The generated menu contains exactly one Azure root, three groups,
+and 11 links. Repeat branch loads retain exactly 15 Azure menu records, and an
+unchanged schema reload reports no changes. Generated non-Azure and internal menu
+sections match their previous values, including IPAM's `/ipam` entry. Main schema
+and network verification and the IPAM seed preview pass; all 26 prefixes remain.
+Worker schema hashes are synchronized, and no branches are stuck merging. All
+523 existing offline tests and Ruff checks passed. Menu layout was verified via
+the API response used by the UI.
+
 ## Source of truth and project boundaries
 
 Git holds schema definitions and bootstrap configuration. Infrahub holds operational

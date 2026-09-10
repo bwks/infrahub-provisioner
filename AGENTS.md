@@ -483,3 +483,20 @@ requires an actual Boolean value for all eight settings and rejects null values.
   branches remained, and active-worker schema hashes agreed. No database edits or
   server restarts were performed. Do not generalize this into deleting merging
   branches without confirming terminal task state and preserving branch data.
+
+## Azure navigation
+
+- `menus/azure.yml` owns 15 CoreMenuItem records under stable namespace `Azuremenu`:
+  Azure root, Organization/Networking/Reference groups, and 11 links. Use the SDK
+  menu loader with an explicit branch; it upserts existing identities. Removing
+  YAML entries does not delete existing menu objects automatically.
+- `schemas/local/azure_menu.yml` sets include_in_menu false for Azure models and
+  generics only. Preserve upstream files and other namespaces' automatic menus.
+  Update this local extension when introducing Azure types to avoid duplicates.
+- Management Groups links to AzureManagementGroupHierarchy, preserving the native
+  hierarchy view. Rules/routes/delegations/endpoints are accessed through parents
+  and direct URLs. Built-in IPAM and internal navigation remain untouched.
+- Run `uv run infrahubctl menu validate menus/azure.yml --branch <branch>` and
+  `uv run infrahubctl menu load menus/azure.yml --branch <branch>` after schema load.
+  Confirm generated `/api/menu` nesting, paths, ordering, unrelated-menu preservation,
+  and unchanged reloads. Menu configuration is separate from schema discovery.

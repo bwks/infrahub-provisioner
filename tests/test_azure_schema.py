@@ -17,6 +17,7 @@ def schemas():
         Path("schemas/azure.yml"),
         Path("schemas/location.yml"),
         Path("schemas/local/azure_management_groups.yml"),
+        Path("schemas/local/azure_menu.yml"),
         Path("schemas/local/azure_status.yml"),
         Path("schemas/local/cloud_locations.yml"),
         Path("schemas/local/network_policy.yml"),

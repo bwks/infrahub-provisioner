@@ -1,0 +1,85 @@
+# Repository-owned Azure navigation; resource kinds and URLs remain unchanged.
+apiVersion: infrahub.app/v1
+kind: Menu
+spec:
+  data:
+  - namespace: Azuremenu
+    name: Main
+    label: Azure
+    icon: mdi:microsoft-azure
+    order_weight: 1000
+    children:
+      data:
+      - namespace: Azuremenu
+        name: Organization
+        label: Organization
+        icon: mdi:domain
+        children:
+          data:
+          - namespace: Azuremenu
+            name: Tenants
+            label: Tenants
+            icon: mdi:office-building
+            kind: AzureTenant
+          - namespace: Azuremenu
+            name: ManagementGroups
+            label: Management Groups
+            icon: mdi:file-tree
+            kind: AzureManagementGroupHierarchy
+          - namespace: Azuremenu
+            name: Subscriptions
+            label: Subscriptions
+            icon: mdi:card-account-details-outline
+            kind: AzureSubscription
+          - namespace: Azuremenu
+            name: ResourceGroups
+            label: Resource Groups
+            icon: mdi:folder-outline
+            kind: AzureResourceGroup
+      - namespace: Azuremenu
+        name: Networking
+        label: Networking
+        icon: mdi:lan
+        children:
+          data:
+          - namespace: Azuremenu
+            name: VirtualNetworks
+            label: Virtual Networks
+            icon: mdi:lan
+            kind: AzureVirtualNetwork
+          - namespace: Azuremenu
+            name: Peerings
+            label: VNet Peerings
+            icon: mdi:swap-horizontal
+            kind: AzureVirtualNetworkPeering
+          - namespace: Azuremenu
+            name: Subnets
+            label: Subnets
+            icon: mdi:ip-network-outline
+            kind: AzureVirtualNetworkSubnet
+          - namespace: Azuremenu
+            name: SecurityGroups
+            label: Network Security Groups
+            icon: mdi:shield-outline
+            kind: AzureNetworkSecurityGroup
+          - namespace: Azuremenu
+            name: RouteTables
+            label: Route Tables
+            icon: mdi:routes
+            kind: AzureRouteTable
+      - namespace: Azuremenu
+        name: Reference
+        label: Reference
+        icon: mdi:book-open-outline
+        children:
+          data:
+          - namespace: Azuremenu
+            name: Regions
+            label: Regions
+            icon: mdi:earth
+            kind: AzureRegion
+          - namespace: Azuremenu
+            name: Tags
+            label: Tags
+            icon: mdi:tag-outline
+            kind: AzureTag
