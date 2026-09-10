@@ -68,6 +68,32 @@ spec:
             icon: mdi:routes
             kind: AzureRouteTable
       - namespace: Azuremenu
+        name: DNS
+        label: DNS
+        icon: mdi:dns
+        children:
+          data:
+          - namespace: Azuremenu
+            name: PrivateDnsZones
+            label: Private DNS Zones
+            kind: AzurePrivateDnsZone
+            icon: mdi:dns
+          - namespace: Azuremenu
+            name: PrivateDnsRecords
+            label: Record Sets
+            kind: AzurePrivateDnsRecordSet
+            icon: mdi:dns
+          - namespace: Azuremenu
+            name: DnsResolvers
+            label: Private Resolvers
+            kind: AzureDnsPrivateResolver
+            icon: mdi:dns
+          - namespace: Azuremenu
+            name: DnsRulesets
+            label: Forwarding Rulesets
+            kind: AzureDnsForwardingRuleset
+            icon: mdi:dns
+      - namespace: Azuremenu
         name: Storage
         label: Storage
         icon: mdi:database-outline

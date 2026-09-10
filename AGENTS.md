@@ -486,8 +486,8 @@ requires an actual Boolean value for all eight settings and rejects null values.
 
 ## Azure navigation
 
-- `menus/azure.yml` owns 19 CoreMenuItem records under stable namespace `Azuremenu`:
-  Azure root, Organization/Networking/Storage/Reference groups, and 14 links. Use the SDK
+- `menus/azure.yml` owns 24 CoreMenuItem records under stable namespace `Azuremenu`:
+  Azure root, Organization/Networking/DNS/Storage/Reference groups, and 18 links. Use the SDK
   menu loader with an explicit branch; it upserts existing identities. Removing
   YAML entries does not delete existing menu objects automatically.
 - `schemas/local/azure_menu.yml` sets include_in_menu false for Azure models and
@@ -522,3 +522,63 @@ requires an actual Boolean value for all eight settings and rejects null values.
   the separate deployment project. Unknown Azure IDs are not prerequisites here.
 - Storage menu links and automatic-menu suppression follow the existing convention.
   Extend schema/tag verification with accounts; preserve existing data and IPAM.
+
+## Azure private DNS
+
+- `schemas/local/dns.yml` adds private zones, zone VNet links, A/AAAA/CNAME/TXT
+  record sets, DNS Private Resolver, inbound/outbound endpoints, forwarding
+  rulesets/rules and ruleset VNet links. This step is schema-only; create no DNS
+  seed data or Azure resources. Preserve existing delegated DNS subnets and IPAM.
+- Private zones are global and have an explicit resource-group parent without
+  AzureResource inheritance or a region. Resolvers/rulesets inherit AzureResource.
+  Only zones/resolvers/rulesets inherit AzureTaggable in this model. All DNS types
+  use shared Planned lifecycle status and optional descriptions.
+- DNS identifiers are case-insensitive, with computed lowercase keys scoped to
+  owner; record identity also includes type. Preserve TXT content case and chunks.
+  Record JSON is a list of A/AAAA/CNAME strings or TXT lists of string chunks.
+  Forwarding target JSON is an ordered list of ip_address/optional port objects;
+  omitted port means 53. Keep these shapes documented for future consumers.
+- Inbound Static addresses require a BuiltinIPAddress reference. Dynamic allows
+  unknown addresses; never infer or allocate a VIP. Validate namespace, containment,
+  and Azure-reserved addresses. Endpoint subnets must be distinct and exclusively
+  delegated to Microsoft.Network/dnsResolvers with one IPv4 /24–/28 prefix.
+- `uv run python scripts/check_azure_dns.py --branch <branch>` is a paginated
+  read-only gate: 0 valid/empty, 1 invalid/read failure. Run network and tag gates
+  alongside it. Nested relationship reads must also paginate and reject incomplete
+  responses. Keep scenario fixtures offline; do not create live test DNS records.
+- The gate validates modeled intent, including direct loop risks using known VIPs.
+  It does not enforce UI/API writes or establish reachability, quotas, external
+  forwarding chains, routing across overlapping namespaces, or Azure deployment
+  readiness. Unknown dynamic addresses cannot participate in loop detection.
+- Add DNS links under the stable Azuremenu namespace. Child links/endpoints/rules
+  are accessed through parents. Preserve all other menu routes, including IPAM.
+- Public DNS, further record types, SOA/autoregistered records, private endpoints
+  and zone groups, fallback options, metadata, synchronization and Terraform export
+  remain deferred. TXT size validation initially targets Azure public cloud.
+- DNS rollout on 2026-09-10: azure-dns passed schema/menu validation and unchanged
+  reloads; 738 offline tests and Ruff passed. The tested files were loaded on main;
+  schema/menu verification, DNS/network/tag/storage gates and IPAM preview passed.
+  All 130 existing objects (IDs, attributes, relationships) were preserved, and all
+  nine DNS inventories remain empty. The main HTTP API temporarily timed out after
+  schema loading, then recovered; remaining checks completed sequentially without
+  server configuration changes. No DNS data was seeded.
+
+## Private DNS zone selector
+
+- `data/azure_private_dns_zones.yaml` pins 91 Azure public-cloud Private Link zone
+  choices and service labels with source provenance; it is not a seed catalog.
+  Keep the zone_selection dropdown in schemas/local/dns.yml synchronized with it.
+- PrivateDnsZone.name is now read-only, computed from zone_selection/custom_name.
+  Fixed entries need no custom input. Custom and eight parameterized entries need
+  a complete name; the DNS gate validates template matching. name_key uses the same
+  direct inputs rather than a computed-attribute dependency chain.
+- Preserve Custom support and case-insensitive resource-group-scoped identity.
+  Exclude SCM and regional ACR data zones according to Microsoft's footnotes;
+  avoid inferring region codes or resource-generated prefixes. Public-cloud list
+  membership is not service availability or Azure subscription discovery.
+- The catalog is embedded as schema choices. Do not seed zone objects or alter
+  records, VNet links, IPAM, or resource-group ownership when adding selections.
+- Selector rollout verified on azure-dns-zone-catalog and main on 2026-09-10:
+  841 tests and Ruff passed, unchanged reload/schema diff passed, and all 130
+  existing objects and 26 prefixes were preserved. Main had zero private-zone
+  instances before the input change, so no data migration was needed.

@@ -1288,6 +1288,7 @@ relationships, and object routes:
 | --- | --- |
 | Organization | Tenants, Management Groups, Subscriptions, Resource Groups |
 | Networking | Virtual Networks, VNet Peerings, Subnets, Network Security Groups, Route Tables |
+| DNS | Private DNS Zones, Record Sets, Private Resolvers, Forwarding Rulesets |
 | Storage | Storage Accounts, Blob Containers, Terraform State Backends |
 | Reference | Regions, Tags |
 
@@ -1466,3 +1467,178 @@ live in [AGENTS.md](AGENTS.md).
 - [Python SDK compatibility](https://docs.infrahub.app/python-sdk/reference/compatibility)
 - [infrahubctl](https://docs.infrahub.app/infrahubctl/infrahubctl)
 - [Experimental Azure schema](https://docs.infrahub.app/schema-library/reference/azure)
+
+## Azure private DNS intent
+
+`schemas/local/dns.yml` models private DNS configuration without creating domains,
+records, resolver services, or forwarding targets. The **Azure → DNS** menu shows
+Private DNS Zones, Record Sets, Private Resolvers, and Forwarding Rulesets. Links,
+endpoints, and forwarding rules are accessed through their parent relationships.
+
+| Model | Ownership and configuration |
+| --- | --- |
+| `AzurePrivateDnsZone` | Resource group; global (no region); Azure tags |
+| `AzurePrivateDnsZoneLink` | Zone; VNet reference; `registration_enabled` defaults false |
+| `AzurePrivateDnsRecordSet` | Zone; relative name; A/AAAA/CNAME/TXT; TTL defaults 3600 seconds; JSON records |
+| `AzureDnsPrivateResolver` | Resource group, region, VNet; Azure tags |
+| `AzureDnsInboundEndpoint` | Resolver; dedicated subnet; Static/Dynamic allocation; optional IPAM address |
+| `AzureDnsOutboundEndpoint` | Resolver; dedicated subnet |
+| `AzureDnsForwardingRuleset` | Resource group, region; one or two outbound endpoints; Azure tags |
+| `AzureDnsForwardingRule` | Ruleset; domain suffix; enabled defaults true; ordered JSON target servers |
+| `AzureDnsForwardingRulesetLink` | Ruleset; VNet reference |
+
+All nine models have optional descriptions and the shared Azure lifecycle choices,
+starting Planned. Names use normalized lowercase keys scoped to their owners;
+record names additionally include the record type in their identity. Zones can
+share a name across resource groups. Zone and ruleset links additionally enforce
+parent/VNet pair uniqueness. Records and child resources do not inherit tags;
+only zones, resolvers, and rulesets support tag assignments in this initial model.
+Unknown Azure resource IDs are not prerequisites.
+
+Zones use their own resource-group relationship rather than `AzureResource`, whose
+required region is inappropriate for global DNS zones. Regional resolvers and
+rulesets reuse `AzureResource` and the existing Region relationship. Subnets expose
+reverse inbound/outbound endpoint references; VNets expose zone links, resolvers,
+and ruleset links.
+
+### DNS values and IPAM
+
+Record values are literal DNS data, independent of IPAM allocations. A record set
+owns its TTL, from 1 to 2147483647 seconds, and a required JSON list. These are
+format examples only, not seed configuration:
+
+```json
+["10.0.2.4", "10.0.2.5"]
+```
+
+The same flat list represents AAAA IPv6 values. A CNAME list contains exactly one
+DNS target, for example `["service.example.internal."]`. Record-set names are
+relative to their zone: `www`, `@` for the apex, or `*.apps` for a wildcard.
+CNAME cannot coexist with another type at the same owner or appear at the apex.
+
+TXT uses an outer list of records, each containing a list of chunks:
+
+```json
+[["v=spf1 ", "include:example.org ~all"], ["Separate TXT record"]]
+```
+
+Chunk boundaries and text case are preserved. Each chunk permits up to 255 UTF-8
+bytes; this initial Azure public-cloud model caps the complete set at 4096 bytes.
+Consumers concatenate chunks within each TXT record, not across records. Record
+sets contain 1–20 records; empty placeholder sets are outside this intent contract.
+
+Forwarding targets are an ordered list. Omitted `port` means 53; explicit ports
+range from 1 to 65535. Order is significant for Azure's retry behavior:
+
+```json
+[{"ip_address": "192.0.2.10", "port": 53}, {"ip_address": "192.0.2.11"}]
+```
+
+Forwarding suffixes are absolute (`example.internal.`); `.` is the catch-all.
+One to six targets are supported. The Azure DNS address `168.63.129.16` is not a
+valid forwarding-rule target. The lifecycle status and the rule's enabled flag
+are independent.
+
+Inbound endpoints instead reference `BuiltinIPAddress` through `ip_address`.
+`allocation_method` defaults Dynamic, allowing the address to remain unknown.
+Static requires an explicit IPAM address; a recorded dynamic address receives the
+same subnet and namespace checks. The validator excludes the first four and last
+IPv4 subnet addresses. It never allocates an address or guesses the dynamic VIP.
+The existing `snet-dns-inbound` and `snet-dns-outbound` subnets remain unchanged and
+have no endpoint objects assigned by this change.
+
+### Validation and boundaries
+
+```sh
+uv run python scripts/check_azure_dns.py --branch <branch>
+uv run python scripts/check_azure_networks.py --branch <branch>
+uv run python scripts/check_azure_tags.py --branch <branch>
+```
+
+The DNS command reads all modeled DNS objects and required context with pagination,
+including nested subnet-prefix and ruleset-endpoint connections. It reports all
+findings with object identifiers. Exit 0 means valid (explicitly empty when no DNS
+objects exist); exit 1 means invalid intent or a read failure. Run the network and
+tag gates alongside it for the complete existing network/address-space and tag
+contracts.
+
+Checks cover DNS naming and record values, ownership and uniqueness, one
+registration zone per VNet, resolver regional/subscription consistency, dedicated
+endpoint subnets with exclusive `Microsoft.Network/dnsResolvers` delegation and
+one IPv4 /24–/28 prefix, endpoint addresses, and ruleset endpoint/link consistency.
+Ruleset VNet links may cross subscriptions within the same tenant and region.
+The DNS gate flags direct forwarding-loop risks when an enabled rule targets a
+known inbound address whose VNet is linked to that same ruleset. It cannot discover
+unknown dynamic addresses, external forwarder chains, or determine routing between
+overlapping address spaces. Literal targets do not imply IPAM ownership.
+
+These are read-only CLI gates, not automatic enforcement of UI/API writes. They do
+not prove live DNS resolution, connectivity, permissions, regional availability,
+subscription quotas, or absence of unmodeled subnet resources. Azure deployment,
+public DNS hosting, additional record types, managed SOA/autoregistered records,
+private endpoints and zone groups, public fallback options, record metadata, cloud
+synchronization, and Terraform export remain deferred. No DNS seed workflow is
+introduced.
+
+The schema verifier checks DNS types, ownership, normalized-key contracts,
+relationships, JSON fields, defaults, and tags. Offline fixtures exercise DNS
+scenarios; live rollout uses the existing schema/menu loaders on a dedicated
+branch before applying the tested files to main.
+
+Sources: [Private DNS records](https://learn.microsoft.com/en-us/azure/dns/dns-private-records),
+[private zones](https://learn.microsoft.com/en-us/azure/dns/private-dns-privatednszone),
+[resolver restrictions](https://learn.microsoft.com/en-us/azure/dns/dns-private-resolver-overview),
+[endpoints and rulesets](https://learn.microsoft.com/en-us/azure/dns/private-resolver-endpoints-rulesets),
+and [Azure resource naming rules](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules).
+
+DNS rollout verified on 2026-09-10: all 738 offline tests and Ruff checks passed.
+`azure-dns` accepted the schema without warnings; schema verification, DNS/network/
+tag gates, IPAM catalog preview, and unchanged schema/menu reloads passed. Its
+24 Azure menu identities remained stable, and generated non-Azure/IPAM navigation
+was unchanged. The same schema and menu files were applied to main through the
+loaders. Main schema/count verification, an empty schema diff, the generated menu,
+DNS/network/tag/storage gates, and IPAM preview all passed. All 130 existing record
+IDs, attributes, and relationships match the preserved snapshot, including six
+subnets and 26 prefixes. All nine DNS inventories remain empty.
+
+Infrahub's HTTP API temporarily stopped responding after the main schema load.
+It subsequently recovered; the remaining menu load and final checks completed
+sequentially. No server configuration changes or DNS data writes were made.
+
+### Select an Azure private zone
+
+The Private DNS Zone form now has an **Azure Private Zone** selector containing
+91 Microsoft-documented Azure public-cloud Private Link zone entries, plus
+**Custom zone**. The pinned catalog is `data/azure_private_dns_zones.yaml`; it
+records the source URL, retrieval date, source hash, and service names. These are
+schema choices, not seeded DNS zone objects.
+
+- For a fixed entry such as `privatelink.blob.core.windows.net`, select it and
+  leave **Custom / Parameterized Zone Name** empty. **Zone Name** is computed.
+- For **Custom zone**, enter your complete private domain in that input.
+- Eight entries contain placeholders. Select the template and enter its complete
+  name, for example `privatelink.australiaeast.azmk8s.io` for
+  `privatelink.{regionName}.azmk8s.io`. The gate checks that it matches the template.
+  Azure service region codes, region names, and resource-specific prefixes are
+  distinct; use the values required by the selected service.
+
+API consumers supply `zone_selection` and, where needed, `custom_name`. The
+existing `name` and `name_key` attributes are read-only and computed directly from
+those inputs, in lowercase. Resource-group ownership, tags, zone links, record
+sets, and existing object routes are unchanged. A selector entry does not create
+a zone, VNet link, private endpoint, or record, or establish service availability.
+
+The catalog follows Microsoft's
+[commercial Private Endpoint DNS table](https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-dns#commercial).
+Its SCM and regional ACR data entries are excluded because the table's footnotes
+say not to create them as separate Azure private zones. Government and China
+catalogs are outside this public-cloud configuration. To refresh the catalog,
+update its provenance and the schema choices together; offline tests check they
+match. Validation continues through `scripts/check_azure_dns.py --branch <branch>`.
+
+Selector rollout verified on 2026-09-10: 841 offline tests and Ruff checks passed.
+`azure-dns-zone-catalog` passed schema and DNS verification, with no warnings and
+an unchanged reload. Main had no private-zone instances requiring migration; the
+same files were loaded there and passed schema/DNS verification and an empty
+schema diff. All 130 existing objects and the 26 prefixes were preserved; the IPAM
+catalog preview reported no missing or conflicting entries. No DNS data was seeded.

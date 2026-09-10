@@ -23,6 +23,7 @@ def schemas():
         Path("schemas/local/network_policy.yml"),
         Path("schemas/local/resource_tags.yml"),
         Path("schemas/local/storage.yml"),
+        Path("schemas/local/dns.yml"),
         Path("schemas/local/subnet_delegation.yml"),
         Path("schemas/local/subnet_service_endpoints.yml"),
         Path("schemas/local/virtual_networks.yml"),
@@ -863,3 +864,82 @@ def test_storage_retention_parameters_and_tag_support(schemas):
         )
         == []
     )
+
+
+@pytest.mark.parametrize(
+    "kind,field",
+    [
+        ("AzurePrivateDnsZone", "resourcegroup"),
+        ("AzureDnsPrivateResolver", "virtual_network"),
+        ("AzureDnsInboundEndpoint", "subnet"),
+        ("AzureDnsOutboundEndpoint", "resolver"),
+        ("AzureDnsForwardingRulesetLink", "ruleset"),
+    ],
+)
+def test_dns_required_relationships(schemas, kind, field):
+    schemas[kind].get_relationship(field).optional = True
+    with pytest.raises(ValueError, match="DNS relationship"):
+        verify_azure(schemas)
+
+
+def test_dns_json_and_global_zone(schemas):
+    from scripts.verify_schema import verify_dns
+
+    schemas["AzurePrivateDnsRecordSet"].get_attribute("records").kind = "Text"
+    with pytest.raises(ValueError, match="required JSON"):
+        verify_dns(schemas)
+    schemas["AzurePrivateDnsRecordSet"].get_attribute("records").kind = "JSON"
+    schemas["AzurePrivateDnsZone"].relationships.append(
+        schemas["AzureDnsPrivateResolver"]
+        .get_relationship("location")
+        .model_copy(deep=True)
+    )
+    with pytest.raises(ValueError, match="global"):
+        verify_dns(schemas)
+
+
+def test_dns_computed_keys():
+    from jinja2 import Template
+
+    data = yaml.safe_load(Path("schemas/local/dns.yml").read_text())
+    for n in data["nodes"]:
+        for a in n.get("attributes", []):
+            if a["name"] in {"name_key", "domain_key"}:
+                template = Template(a["computed_attribute"]["jinja2_template"])
+                assert (
+                    template.render(
+                        name__value="Mixed.Name",
+                        domain_name__value="Mixed.Name",
+                        zone_selection__value="custom",
+                        custom_name__value="Mixed.Name",
+                    )
+                    == "mixed.name"
+                )
+
+
+def test_dns_menu_contract():
+    from scripts.check_azure_dns import DNS_KINDS
+
+    data = yaml.safe_load(Path("menus/azure.yml").read_text())
+    groups = data["spec"]["data"][0]["children"]["data"]
+    assert [n["label"] for n in groups] == [
+        "Organization",
+        "Networking",
+        "DNS",
+        "Storage",
+        "Reference",
+    ]
+    dns = groups[2]["children"]["data"]
+    assert [n["kind"] for n in dns] == [
+        "AzurePrivateDnsZone",
+        "AzurePrivateDnsRecordSet",
+        "AzureDnsPrivateResolver",
+        "AzureDnsForwardingRuleset",
+    ]
+    suppression = yaml.safe_load(Path("schemas/local/azure_menu.yml").read_text())
+    hidden = {
+        n["namespace"] + n["name"]
+        for n in suppression["nodes"]
+        if n["include_in_menu"] is False
+    }
+    assert set(DNS_KINDS) <= hidden

@@ -55,6 +55,33 @@ nodes:
 - name: TerraformStateBackend
   namespace: Azure
   include_in_menu: false
+- name: PrivateDnsZone
+  namespace: Azure
+  include_in_menu: false
+- name: PrivateDnsZoneLink
+  namespace: Azure
+  include_in_menu: false
+- name: PrivateDnsRecordSet
+  namespace: Azure
+  include_in_menu: false
+- name: DnsPrivateResolver
+  namespace: Azure
+  include_in_menu: false
+- name: DnsInboundEndpoint
+  namespace: Azure
+  include_in_menu: false
+- name: DnsOutboundEndpoint
+  namespace: Azure
+  include_in_menu: false
+- name: DnsForwardingRuleset
+  namespace: Azure
+  include_in_menu: false
+- name: DnsForwardingRule
+  namespace: Azure
+  include_in_menu: false
+- name: DnsForwardingRulesetLink
+  namespace: Azure
+  include_in_menu: false
 generics:
 - name: Resource
   namespace: Azure

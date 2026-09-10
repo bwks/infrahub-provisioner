@@ -1,0 +1,1066 @@
+# Private DNS intent only; no DNS data or Azure resources are created.
+version: '1.0'
+nodes:
+- name: PrivateDnsZone
+  namespace: Azure
+  label: Private DNS Zones
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: zone_selection
+    label: Azure Private Zone
+    kind: Dropdown
+    optional: false
+    description: Select a Microsoft Private Link zone or Custom. Names containing
+      braces require a complete zone name below.
+    choices:
+    - name: privatelink-global.wvd.microsoft.com
+      label: privatelink-global.wvd.microsoft.com
+      description: Azure Virtual Desktop
+    - name: privatelink.account.maps.azure.com
+      label: privatelink.account.maps.azure.com
+      description: Azure Maps
+    - name: privatelink.adf.azure.com
+      label: privatelink.adf.azure.com
+      description: Azure Data Factory
+    - name: privatelink.afs.azure.net
+      label: privatelink.afs.azure.net
+      description: Azure File Sync
+    - name: privatelink.agentsvc.azure-automation.net
+      label: privatelink.agentsvc.azure-automation.net
+      description: Azure Monitor
+    - name: privatelink.analysis.windows.net
+      label: privatelink.analysis.windows.net
+      description: Microsoft Power BI
+    - name: privatelink.analytics.cosmos.azure.com
+      label: privatelink.analytics.cosmos.azure.com
+      description: Azure Cosmos DB
+    - name: privatelink.api.adu.microsoft.com
+      label: privatelink.api.adu.microsoft.com
+      description: Device Update for IoT Hubs
+    - name: privatelink.api.azureml.ms
+      label: privatelink.api.azureml.ms
+      description: Azure Machine Learning workspace, Azure Machine Learning registry
+    - name: privatelink.api.videoindexer.ai
+      label: privatelink.api.videoindexer.ai
+      description: Azure AI Video Indexer
+    - name: privatelink.attest.azure.net
+      label: privatelink.attest.azure.net
+      description: Azure Attestation
+    - name: privatelink.azconfig.io
+      label: privatelink.azconfig.io
+      description: Azure App Configuration
+    - name: privatelink.azure-api.net
+      label: privatelink.azure-api.net
+      description: Azure API Management
+    - name: privatelink.azure-automation.net
+      label: privatelink.azure-automation.net
+      description: Azure Automation
+    - name: privatelink.azure-devices-provisioning.net
+      label: privatelink.azure-devices-provisioning.net
+      description: Azure IoT Hub Device Provisioning Service, Azure IoT Central
+    - name: privatelink.azure-devices.net
+      label: privatelink.azure-devices.net
+      description: Azure IoT Hub, Azure IoT Central
+    - name: privatelink.azure.com
+      label: privatelink.azure.com
+      description: Azure Resource Manager
+    - name: privatelink.azurecr.io
+      label: privatelink.azurecr.io
+      description: Azure Container Registry
+    - name: privatelink.azuredatabricks.net
+      label: privatelink.azuredatabricks.net
+      description: Azure Databricks
+    - name: privatelink.azurehdinsight.net
+      label: privatelink.azurehdinsight.net
+      description: Azure HDInsight
+    - name: privatelink.azurehealthcareapis.com
+      label: privatelink.azurehealthcareapis.com
+      description: Azure Health Data Services
+    - name: privatelink.azureiotcentral.com
+      label: privatelink.azureiotcentral.com
+      description: Azure IoT Central
+    - name: privatelink.azurestaticapps.net
+      label: privatelink.azurestaticapps.net
+      description: Azure Static Web Apps
+    - name: privatelink.azuresynapse.net
+      label: privatelink.azuresynapse.net
+      description: Azure Synapse Studio
+    - name: privatelink.azurewebsites.net
+      label: privatelink.azurewebsites.net
+      description: Azure Web Apps / Azure Function Apps
+    - name: privatelink.batch.azure.com
+      label: privatelink.batch.azure.com
+      description: Azure Batch
+    - name: privatelink.blob.core.windows.net
+      label: privatelink.blob.core.windows.net
+      description: Azure Data Explorer, Azure Backup, Azure Monitor, Storage account,
+        Azure Managed Disks, Azure Elastic SAN
+    - name: privatelink.cassandra.cosmos.azure.com
+      label: privatelink.cassandra.cosmos.azure.com
+      description: Azure Cosmos DB
+    - name: privatelink.cognitiveservices.azure.com
+      label: privatelink.cognitiveservices.azure.com
+      description: Foundry Tools
+    - name: privatelink.database.windows.net
+      label: privatelink.database.windows.net
+      description: Azure SQL Database
+    - name: privatelink.datafactory.azure.net
+      label: privatelink.datafactory.azure.net
+      description: Azure Data Factory
+    - name: privatelink.dev.azuresynapse.net
+      label: privatelink.dev.azuresynapse.net
+      description: Azure Synapse Analytics
+    - name: privatelink.dfs.core.windows.net
+      label: privatelink.dfs.core.windows.net
+      description: Azure Data Lake File System Gen2
+    - name: privatelink.dicom.azurehealthcareapis.com
+      label: privatelink.dicom.azurehealthcareapis.com
+      description: Azure Health Data Services
+    - name: privatelink.digitaltwins.azure.net
+      label: privatelink.digitaltwins.azure.net
+      description: Azure Digital Twins
+    - name: privatelink.directline.botframework.com
+      label: privatelink.directline.botframework.com
+      description: Azure Bot Service
+    - name: privatelink.documents.azure.com
+      label: privatelink.documents.azure.com
+      description: Azure Cosmos DB
+    - name: privatelink.dp.kubernetesconfiguration.azure.com
+      label: privatelink.dp.kubernetesconfiguration.azure.com
+      description: Azure Arc
+    - name: privatelink.eventgrid.azure.net
+      label: privatelink.eventgrid.azure.net
+      description: Azure Event Grid
+    - name: privatelink.fabric.microsoft.com
+      label: privatelink.fabric.microsoft.com
+      description: Microsoft Fabric
+    - name: privatelink.file.core.windows.net
+      label: privatelink.file.core.windows.net
+      description: Storage account, Azure Files
+    - name: privatelink.grafana.azure.com
+      label: privatelink.grafana.azure.com
+      description: Azure Managed Grafana
+    - name: privatelink.gremlin.cosmos.azure.com
+      label: privatelink.gremlin.cosmos.azure.com
+      description: Azure Cosmos DB
+    - name: privatelink.guestconfiguration.azure.com
+      label: privatelink.guestconfiguration.azure.com
+      description: Azure Arc
+    - name: privatelink.his.arc.azure.com
+      label: privatelink.his.arc.azure.com
+      description: Azure Arc
+    - name: privatelink.managedhsm.azure.net
+      label: privatelink.managedhsm.azure.net
+      description: Azure Key Vault
+    - name: privatelink.mariadb.database.azure.com
+      label: privatelink.mariadb.database.azure.com
+      description: Azure Database for MariaDB
+    - name: privatelink.media.azure.net
+      label: privatelink.media.azure.net
+      description: Azure Media Services
+    - name: privatelink.mongo.cosmos.azure.com
+      label: privatelink.mongo.cosmos.azure.com
+      description: Azure Cosmos DB
+    - name: privatelink.mongocluster.cosmos.azure.com
+      label: privatelink.mongocluster.cosmos.azure.com
+      description: Azure Cosmos DB for MongoDB - vCore
+    - name: privatelink.monitor.azure.com
+      label: privatelink.monitor.azure.com
+      description: Azure Monitor
+    - name: privatelink.mysql.database.azure.com
+      label: privatelink.mysql.database.azure.com
+      description: Azure Database for MySQL - Single Server, Azure Database for MySQL
+        - Flexible Server
+    - name: privatelink.notebooks.azure.net
+      label: privatelink.notebooks.azure.net
+      description: Azure Machine Learning workspace
+    - name: privatelink.ods.opinsights.azure.com
+      label: privatelink.ods.opinsights.azure.com
+      description: Azure Monitor
+    - name: privatelink.oms.opinsights.azure.com
+      label: privatelink.oms.opinsights.azure.com
+      description: Azure Monitor
+    - name: privatelink.openai.azure.com
+      label: privatelink.openai.azure.com
+      description: Foundry Tools
+    - name: privatelink.pbidedicated.windows.net
+      label: privatelink.pbidedicated.windows.net
+      description: Microsoft Power BI
+    - name: privatelink.postgres.cosmos.azure.com
+      label: privatelink.postgres.cosmos.azure.com
+      description: Azure Cosmos DB
+    - name: privatelink.postgres.database.azure.com
+      label: privatelink.postgres.database.azure.com
+      description: Azure Database for PostgreSQL - Single server, Azure Database for
+        PostgreSQL - Flexible server
+    - name: privatelink.prod.migration.windowsazure.com
+      label: privatelink.prod.migration.windowsazure.com
+      description: Azure Migrate
+    - name: privatelink.prod.powerquery.microsoft.com
+      label: privatelink.prod.powerquery.microsoft.com
+      description: Microsoft Power BI
+    - name: privatelink.purview-service.microsoft.com
+      label: privatelink.purview-service.microsoft.com
+      description: Microsoft Purview
+    - name: privatelink.purview.azure.com
+      label: privatelink.purview.azure.com
+      description: Microsoft Purview
+    - name: privatelink.purviewstudio.azure.com
+      label: privatelink.purviewstudio.azure.com
+      description: Microsoft Purview
+    - name: privatelink.queue.core.windows.net
+      label: privatelink.queue.core.windows.net
+      description: Azure Data Explorer, Azure Backup, Storage account
+    - name: privatelink.redis.azure.net
+      label: privatelink.redis.azure.net
+      description: Azure Managed Redis
+    - name: privatelink.redis.cache.windows.net
+      label: privatelink.redis.cache.windows.net
+      description: Azure Cache for Redis
+    - name: privatelink.redisenterprise.cache.azure.net
+      label: privatelink.redisenterprise.cache.azure.net
+      description: Azure Cache for Redis Enterprise
+    - name: privatelink.search.windows.net
+      label: privatelink.search.windows.net
+      description: Azure Search
+    - name: privatelink.service.signalr.net
+      label: privatelink.service.signalr.net
+      description: SignalR
+    - name: privatelink.servicebus.windows.net
+      label: privatelink.servicebus.windows.net
+      description: Azure Event Hubs, Azure Service Bus, Azure IoT Hub, Azure IoT Central,
+        Azure Relay
+    - name: privatelink.services.ai.azure.com
+      label: privatelink.services.ai.azure.com
+      description: Foundry Tools
+    - name: privatelink.siterecovery.windowsazure.com
+      label: privatelink.siterecovery.windowsazure.com
+      description: Azure Site Recovery
+    - name: privatelink.sql.azuresynapse.net
+      label: privatelink.sql.azuresynapse.net
+      description: Azure Synapse Analytics
+    - name: privatelink.sqlx.cosmos.azure.com
+      label: privatelink.sqlx.cosmos.azure.com
+      description: Azure Cosmos DB
+    - name: privatelink.table.core.windows.net
+      label: privatelink.table.core.windows.net
+      description: Azure Data Explorer, Storage account
+    - name: privatelink.table.cosmos.azure.com
+      label: privatelink.table.cosmos.azure.com
+      description: Azure Cosmos DB
+    - name: privatelink.token.botframework.com
+      label: privatelink.token.botframework.com
+      description: Azure Bot Service
+    - name: privatelink.ts.eventgrid.azure.net
+      label: privatelink.ts.eventgrid.azure.net
+      description: Azure Event Grid
+    - name: privatelink.vaultcore.azure.net
+      label: privatelink.vaultcore.azure.net
+      description: Azure Key Vault
+    - name: privatelink.web.core.windows.net
+      label: privatelink.web.core.windows.net
+      description: Storage account
+    - name: privatelink.webpubsub.azure.com
+      label: privatelink.webpubsub.azure.com
+      description: Azure Web PubSub service
+    - name: privatelink.wvd.microsoft.com
+      label: privatelink.wvd.microsoft.com
+      description: Azure Virtual Desktop
+    - name: privatelink.{dnsPrefix}.database.windows.net
+      label: privatelink.{dnsPrefix}.database.windows.net
+      description: Azure SQL Managed Instance
+    - name: privatelink.{partitionId}.azurestaticapps.net
+      label: privatelink.{partitionId}.azurestaticapps.net
+      description: Azure Static Web Apps
+    - name: privatelink.{regionCode}.backup.windowsazure.com
+      label: privatelink.{regionCode}.backup.windowsazure.com
+      description: Azure Backup
+    - name: privatelink.{regionName}.azmk8s.io
+      label: privatelink.{regionName}.azmk8s.io
+      description: Azure Kubernetes Service - Kubernetes API
+    - name: privatelink.{regionName}.azurecontainerapps.io
+      label: privatelink.{regionName}.azurecontainerapps.io
+      description: Azure Container Apps
+    - name: privatelink.{regionName}.kusto.windows.net
+      label: privatelink.{regionName}.kusto.windows.net
+      description: Azure Data Explorer
+    - name: privatelink.{region}.prometheus.monitor.azure.com
+      label: privatelink.{region}.prometheus.monitor.azure.com
+      description: Azure Managed Prometheus
+    - name: '{subzone}.privatelink.{regionName}.azmk8s.io'
+      label: '{subzone}.privatelink.{regionName}.azmk8s.io'
+      description: Azure Kubernetes Service - Kubernetes API
+    - name: custom
+      label: Custom zone
+  - name: custom_name
+    label: Custom / Parameterized Zone Name
+    kind: Text
+    optional: true
+    parameters:
+      min_length: 1
+      max_length: 253
+    description: Enter the complete zone name for Custom or a template containing
+      braces. Leave empty for fixed Azure zone choices.
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 253
+    read_only: true
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ ((custom_name__value or '''') if zone_selection__value
+        == ''custom'' or ''{'' in (zone_selection__value or '''') else (zone_selection__value
+        or '''')) | lower }}'
+    label: Zone Name
+  - name: name_key
+    label: Normalized Name
+    kind: Text
+    optional: false
+    read_only: true
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ ((custom_name__value or '''') if zone_selection__value
+        == ''custom'' or ''{'' in (zone_selection__value or '''') else (zone_selection__value
+        or '''')) | lower }}'
+  relationships:
+  - name: resourcegroup
+    peer: AzureResourceGroup
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_rg__private_dns_zones
+  - name: links
+    peer: AzurePrivateDnsZoneLink
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_private_dns_zone__links
+  - name: record_sets
+    peer: AzurePrivateDnsRecordSet
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_private_dns_zone__records
+  uniqueness_constraints:
+  - - resourcegroup
+    - name_key__value
+  inherit_from:
+  - AzureTaggable
+- name: PrivateDnsZoneLink
+  namespace: Azure
+  label: Private DNS Zone Links
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+  - name: name_key
+    label: Normalized Name
+    kind: Text
+    optional: false
+    read_only: true
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: registration_enabled
+    kind: Boolean
+    optional: false
+    default_value: false
+  relationships:
+  - name: zone
+    peer: AzurePrivateDnsZone
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_private_dns_zone__links
+  - name: virtual_network
+    peer: AzureVirtualNetwork
+    kind: Attribute
+    cardinality: one
+    optional: false
+    identifier: azure_vnet__private_dns_links
+  uniqueness_constraints:
+  - - zone
+    - name_key__value
+  - - zone
+    - virtual_network
+- name: PrivateDnsRecordSet
+  namespace: Azure
+  label: Private DNS Record Sets
+  include_in_menu: false
+  display_label: '{{ name__value }} ({{ record_type__value }})'
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 253
+  - name: name_key
+    label: Normalized Name
+    kind: Text
+    optional: false
+    read_only: true
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: record_type
+    kind: Dropdown
+    optional: false
+    choices:
+    - name: A
+      label: A
+    - name: AAAA
+      label: AAAA
+    - name: CNAME
+      label: CNAME
+    - name: TXT
+      label: TXT
+  - name: ttl
+    kind: Number
+    optional: false
+    default_value: 3600
+    parameters:
+      min_value: 1
+      max_value: 2147483647
+  - name: records
+    kind: JSON
+    optional: false
+    description: 'A/AAAA/CNAME: list of literal strings. TXT: list of records, each
+      a list of text chunks (up to 255 bytes per chunk).'
+  relationships:
+  - name: zone
+    peer: AzurePrivateDnsZone
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_private_dns_zone__records
+  uniqueness_constraints:
+  - - zone
+    - name_key__value
+    - record_type__value
+- name: DnsPrivateResolver
+  namespace: Azure
+  label: DNS Private Resolvers
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?\Z
+  - name: name_key
+    label: Normalized Name
+    kind: Text
+    optional: false
+    read_only: true
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  relationships:
+  - &id001
+    name: location
+    peer: AzureRegion
+    kind: Attribute
+    cardinality: one
+    optional: false
+    label: Region
+  - name: virtual_network
+    peer: AzureVirtualNetwork
+    kind: Attribute
+    cardinality: one
+    optional: false
+    identifier: azure_vnet__dns_resolvers
+  - name: inbound_endpoints
+    peer: AzureDnsInboundEndpoint
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_dns_resolver__inbound
+  - name: outbound_endpoints
+    peer: AzureDnsOutboundEndpoint
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_dns_resolver__outbound
+  uniqueness_constraints:
+  - - resourcegroup
+    - name_key__value
+  - - virtual_network
+  inherit_from:
+  - AzureResource
+  - AzureTaggable
+- name: DnsInboundEndpoint
+  namespace: Azure
+  label: DNS Inbound Endpoints
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?\Z
+  - name: name_key
+    label: Normalized Name
+    kind: Text
+    optional: false
+    read_only: true
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: allocation_method
+    kind: Dropdown
+    optional: false
+    choices:
+    - name: Static
+      label: Static
+    - name: Dynamic
+      label: Dynamic
+    default_value: Dynamic
+  relationships:
+  - name: resolver
+    peer: AzureDnsPrivateResolver
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_dns_resolver__inbound
+  - name: subnet
+    peer: AzureVirtualNetworkSubnet
+    kind: Attribute
+    cardinality: one
+    optional: false
+    identifier: azure_subnet__dns_inbound
+  - name: ip_address
+    peer: BuiltinIPAddress
+    kind: Attribute
+    cardinality: one
+    optional: true
+    identifier: azure_dns_inbound__address
+  uniqueness_constraints:
+  - - resolver
+    - name_key__value
+  - - subnet
+- name: DnsOutboundEndpoint
+  namespace: Azure
+  label: DNS Outbound Endpoints
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?\Z
+  - name: name_key
+    label: Normalized Name
+    kind: Text
+    optional: false
+    read_only: true
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  relationships:
+  - name: resolver
+    peer: AzureDnsPrivateResolver
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_dns_resolver__outbound
+  - name: subnet
+    peer: AzureVirtualNetworkSubnet
+    kind: Attribute
+    cardinality: one
+    optional: false
+    identifier: azure_subnet__dns_outbound
+  - name: rulesets
+    peer: AzureDnsForwardingRuleset
+    kind: Generic
+    cardinality: many
+    optional: true
+    identifier: azure_dns_ruleset__outbound
+  uniqueness_constraints:
+  - - resolver
+    - name_key__value
+  - - subnet
+- name: DnsForwardingRuleset
+  namespace: Azure
+  label: DNS Forwarding Rulesets
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?\Z
+  - name: name_key
+    label: Normalized Name
+    kind: Text
+    optional: false
+    read_only: true
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  relationships:
+  - *id001
+  - name: outbound_endpoints
+    peer: AzureDnsOutboundEndpoint
+    kind: Attribute
+    cardinality: many
+    optional: false
+    identifier: azure_dns_ruleset__outbound
+    min_count: 1
+    max_count: 2
+  - name: rules
+    peer: AzureDnsForwardingRule
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_dns_ruleset__rules
+  - name: links
+    peer: AzureDnsForwardingRulesetLink
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_dns_ruleset__links
+  uniqueness_constraints:
+  - - resourcegroup
+    - name_key__value
+  inherit_from:
+  - AzureResource
+  - AzureTaggable
+- name: DnsForwardingRule
+  namespace: Azure
+  label: DNS Forwarding Rules
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+  - name: name_key
+    label: Normalized Name
+    kind: Text
+    optional: false
+    read_only: true
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: domain_name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 254
+    description: Absolute DNS suffix with trailing dot; a single dot forwards all
+      otherwise unmatched names.
+  - name: domain_key
+    kind: Text
+    optional: false
+    read_only: true
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ domain_name__value | lower }}'
+  - name: enabled
+    kind: Boolean
+    optional: false
+    default_value: true
+  - name: target_servers
+    kind: JSON
+    optional: false
+    description: 'Ordered list of objects: {"ip_address": "10.0.0.4", "port": 53}.
+      Omitted port means 53; one to six targets.'
+  relationships:
+  - name: ruleset
+    peer: AzureDnsForwardingRuleset
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_dns_ruleset__rules
+  uniqueness_constraints:
+  - - ruleset
+    - name_key__value
+  - - ruleset
+    - domain_key__value
+- name: DnsForwardingRulesetLink
+  namespace: Azure
+  label: DNS Forwarding Ruleset Links
+  include_in_menu: false
+  display_label: name__value
+  attributes:
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+  - name: name_key
+    label: Normalized Name
+    kind: Text
+    optional: false
+    read_only: true
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  relationships:
+  - name: ruleset
+    peer: AzureDnsForwardingRuleset
+    kind: Parent
+    cardinality: one
+    optional: false
+    identifier: azure_dns_ruleset__links
+  - name: virtual_network
+    peer: AzureVirtualNetwork
+    kind: Attribute
+    cardinality: one
+    optional: false
+    identifier: azure_vnet__dns_ruleset_links
+  uniqueness_constraints:
+  - - ruleset
+    - name_key__value
+  - - ruleset
+    - virtual_network
+- name: ResourceGroup
+  namespace: Azure
+  relationships:
+  - name: private_dns_zones
+    peer: AzurePrivateDnsZone
+    kind: Component
+    cardinality: many
+    optional: true
+    identifier: azure_rg__private_dns_zones
+- name: VirtualNetwork
+  namespace: Azure
+  relationships:
+  - name: private_dns_links
+    peer: AzurePrivateDnsZoneLink
+    kind: Generic
+    cardinality: many
+    optional: true
+    identifier: azure_vnet__private_dns_links
+  - name: dns_resolvers
+    peer: AzureDnsPrivateResolver
+    kind: Generic
+    cardinality: many
+    optional: true
+    identifier: azure_vnet__dns_resolvers
+  - name: dns_ruleset_links
+    peer: AzureDnsForwardingRulesetLink
+    kind: Generic
+    cardinality: many
+    optional: true
+    identifier: azure_vnet__dns_ruleset_links
+- name: VirtualNetworkSubnet
+  namespace: Azure
+  relationships:
+  - name: dns_inbound_endpoints
+    peer: AzureDnsInboundEndpoint
+    kind: Generic
+    cardinality: many
+    optional: true
+    identifier: azure_subnet__dns_inbound
+  - name: dns_outbound_endpoints
+    peer: AzureDnsOutboundEndpoint
+    kind: Generic
+    cardinality: many
+    optional: true
+    identifier: azure_subnet__dns_outbound

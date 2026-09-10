@@ -1,0 +1,301 @@
+# Microsoft Private Link zone choices; this is not a resource seed catalog.
+source:
+  url: https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-dns
+  retrieved: '2026-09-10'
+  source_sha256: ca15b198d75d7fdc30333c10a3b125b8f5bdf4121eba628265ba7d08cd202250
+  cloud: Azure public cloud
+excluded:
+- scm.privatelink.azurewebsites.net
+- '{regionName}.data.privatelink.azurecr.io'
+zones:
+- name: privatelink-global.wvd.microsoft.com
+  services:
+  - Azure Virtual Desktop
+- name: privatelink.account.maps.azure.com
+  services:
+  - Azure Maps
+- name: privatelink.adf.azure.com
+  services:
+  - Azure Data Factory
+- name: privatelink.afs.azure.net
+  services:
+  - Azure File Sync
+- name: privatelink.agentsvc.azure-automation.net
+  services:
+  - Azure Monitor
+- name: privatelink.analysis.windows.net
+  services:
+  - Microsoft Power BI
+- name: privatelink.analytics.cosmos.azure.com
+  services:
+  - Azure Cosmos DB
+- name: privatelink.api.adu.microsoft.com
+  services:
+  - Device Update for IoT Hubs
+- name: privatelink.api.azureml.ms
+  services:
+  - Azure Machine Learning workspace
+  - Azure Machine Learning registry
+- name: privatelink.api.videoindexer.ai
+  services:
+  - Azure AI Video Indexer
+- name: privatelink.attest.azure.net
+  services:
+  - Azure Attestation
+- name: privatelink.azconfig.io
+  services:
+  - Azure App Configuration
+- name: privatelink.azure-api.net
+  services:
+  - Azure API Management
+- name: privatelink.azure-automation.net
+  services:
+  - Azure Automation
+- name: privatelink.azure-devices-provisioning.net
+  services:
+  - Azure IoT Hub Device Provisioning Service
+  - Azure IoT Central
+- name: privatelink.azure-devices.net
+  services:
+  - Azure IoT Hub
+  - Azure IoT Central
+- name: privatelink.azure.com
+  services:
+  - Azure Resource Manager
+- name: privatelink.azurecr.io
+  services:
+  - Azure Container Registry
+- name: privatelink.azuredatabricks.net
+  services:
+  - Azure Databricks
+- name: privatelink.azurehdinsight.net
+  services:
+  - Azure HDInsight
+- name: privatelink.azurehealthcareapis.com
+  services:
+  - Azure Health Data Services
+- name: privatelink.azureiotcentral.com
+  services:
+  - Azure IoT Central
+- name: privatelink.azurestaticapps.net
+  services:
+  - Azure Static Web Apps
+- name: privatelink.azuresynapse.net
+  services:
+  - Azure Synapse Studio
+- name: privatelink.azurewebsites.net
+  services:
+  - Azure Web Apps / Azure Function Apps
+- name: privatelink.batch.azure.com
+  services:
+  - Azure Batch
+- name: privatelink.blob.core.windows.net
+  services:
+  - Azure Data Explorer
+  - Azure Backup
+  - Azure Monitor
+  - Storage account
+  - Azure Managed Disks
+  - Azure Elastic SAN
+- name: privatelink.cassandra.cosmos.azure.com
+  services:
+  - Azure Cosmos DB
+- name: privatelink.cognitiveservices.azure.com
+  services:
+  - Foundry Tools
+- name: privatelink.database.windows.net
+  services:
+  - Azure SQL Database
+- name: privatelink.datafactory.azure.net
+  services:
+  - Azure Data Factory
+- name: privatelink.dev.azuresynapse.net
+  services:
+  - Azure Synapse Analytics
+- name: privatelink.dfs.core.windows.net
+  services:
+  - Azure Data Lake File System Gen2
+- name: privatelink.dicom.azurehealthcareapis.com
+  services:
+  - Azure Health Data Services
+- name: privatelink.digitaltwins.azure.net
+  services:
+  - Azure Digital Twins
+- name: privatelink.directline.botframework.com
+  services:
+  - Azure Bot Service
+- name: privatelink.documents.azure.com
+  services:
+  - Azure Cosmos DB
+- name: privatelink.dp.kubernetesconfiguration.azure.com
+  services:
+  - Azure Arc
+- name: privatelink.eventgrid.azure.net
+  services:
+  - Azure Event Grid
+- name: privatelink.fabric.microsoft.com
+  services:
+  - Microsoft Fabric
+- name: privatelink.file.core.windows.net
+  services:
+  - Storage account
+  - Azure Files
+- name: privatelink.grafana.azure.com
+  services:
+  - Azure Managed Grafana
+- name: privatelink.gremlin.cosmos.azure.com
+  services:
+  - Azure Cosmos DB
+- name: privatelink.guestconfiguration.azure.com
+  services:
+  - Azure Arc
+- name: privatelink.his.arc.azure.com
+  services:
+  - Azure Arc
+- name: privatelink.managedhsm.azure.net
+  services:
+  - Azure Key Vault
+- name: privatelink.mariadb.database.azure.com
+  services:
+  - Azure Database for MariaDB
+- name: privatelink.media.azure.net
+  services:
+  - Azure Media Services
+- name: privatelink.mongo.cosmos.azure.com
+  services:
+  - Azure Cosmos DB
+- name: privatelink.mongocluster.cosmos.azure.com
+  services:
+  - Azure Cosmos DB for MongoDB - vCore
+- name: privatelink.monitor.azure.com
+  services:
+  - Azure Monitor
+- name: privatelink.mysql.database.azure.com
+  services:
+  - Azure Database for MySQL - Single Server
+  - Azure Database for MySQL - Flexible Server
+- name: privatelink.notebooks.azure.net
+  services:
+  - Azure Machine Learning workspace
+- name: privatelink.ods.opinsights.azure.com
+  services:
+  - Azure Monitor
+- name: privatelink.oms.opinsights.azure.com
+  services:
+  - Azure Monitor
+- name: privatelink.openai.azure.com
+  services:
+  - Foundry Tools
+- name: privatelink.pbidedicated.windows.net
+  services:
+  - Microsoft Power BI
+- name: privatelink.postgres.cosmos.azure.com
+  services:
+  - Azure Cosmos DB
+- name: privatelink.postgres.database.azure.com
+  services:
+  - Azure Database for PostgreSQL - Single server
+  - Azure Database for PostgreSQL - Flexible server
+- name: privatelink.prod.migration.windowsazure.com
+  services:
+  - Azure Migrate
+- name: privatelink.prod.powerquery.microsoft.com
+  services:
+  - Microsoft Power BI
+- name: privatelink.purview-service.microsoft.com
+  services:
+  - Microsoft Purview
+- name: privatelink.purview.azure.com
+  services:
+  - Microsoft Purview
+- name: privatelink.purviewstudio.azure.com
+  services:
+  - Microsoft Purview
+- name: privatelink.queue.core.windows.net
+  services:
+  - Azure Data Explorer
+  - Azure Backup
+  - Storage account
+- name: privatelink.redis.azure.net
+  services:
+  - Azure Managed Redis
+- name: privatelink.redis.cache.windows.net
+  services:
+  - Azure Cache for Redis
+- name: privatelink.redisenterprise.cache.azure.net
+  services:
+  - Azure Cache for Redis Enterprise
+- name: privatelink.search.windows.net
+  services:
+  - Azure Search
+- name: privatelink.service.signalr.net
+  services:
+  - SignalR
+- name: privatelink.servicebus.windows.net
+  services:
+  - Azure Event Hubs
+  - Azure Service Bus
+  - Azure IoT Hub
+  - Azure IoT Central
+  - Azure Relay
+- name: privatelink.services.ai.azure.com
+  services:
+  - Foundry Tools
+- name: privatelink.siterecovery.windowsazure.com
+  services:
+  - Azure Site Recovery
+- name: privatelink.sql.azuresynapse.net
+  services:
+  - Azure Synapse Analytics
+- name: privatelink.sqlx.cosmos.azure.com
+  services:
+  - Azure Cosmos DB
+- name: privatelink.table.core.windows.net
+  services:
+  - Azure Data Explorer
+  - Storage account
+- name: privatelink.table.cosmos.azure.com
+  services:
+  - Azure Cosmos DB
+- name: privatelink.token.botframework.com
+  services:
+  - Azure Bot Service
+- name: privatelink.ts.eventgrid.azure.net
+  services:
+  - Azure Event Grid
+- name: privatelink.vaultcore.azure.net
+  services:
+  - Azure Key Vault
+- name: privatelink.web.core.windows.net
+  services:
+  - Storage account
+- name: privatelink.webpubsub.azure.com
+  services:
+  - Azure Web PubSub service
+- name: privatelink.wvd.microsoft.com
+  services:
+  - Azure Virtual Desktop
+- name: privatelink.{dnsPrefix}.database.windows.net
+  services:
+  - Azure SQL Managed Instance
+- name: privatelink.{partitionId}.azurestaticapps.net
+  services:
+  - Azure Static Web Apps
+- name: privatelink.{regionCode}.backup.windowsazure.com
+  services:
+  - Azure Backup
+- name: privatelink.{regionName}.azmk8s.io
+  services:
+  - Azure Kubernetes Service - Kubernetes API
+- name: privatelink.{regionName}.azurecontainerapps.io
+  services:
+  - Azure Container Apps
+- name: privatelink.{regionName}.kusto.windows.net
+  services:
+  - Azure Data Explorer
+- name: privatelink.{region}.prometheus.monitor.azure.com
+  services:
+  - Azure Managed Prometheus
+- name: '{subzone}.privatelink.{regionName}.azmk8s.io'
+  services:
+  - Azure Kubernetes Service - Kubernetes API

@@ -15,6 +15,9 @@ OWNER_KINDS = (
     "AzureNetworkSecurityGroup",
     "AzureRouteTable",
     "AzureStorageAccount",
+    "AzurePrivateDnsZone",
+    "AzureDnsPrivateResolver",
+    "AzureDnsForwardingRuleset",
 )
 INVALID_KEY_CHARACTERS = set("<>%&\\?/")
 

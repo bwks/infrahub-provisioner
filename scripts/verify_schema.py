@@ -26,6 +26,15 @@ AZURE_NODES = (
     "AzureStorageAccount",
     "AzureBlobContainer",
     "AzureTerraformStateBackend",
+    "AzurePrivateDnsZone",
+    "AzurePrivateDnsZoneLink",
+    "AzurePrivateDnsRecordSet",
+    "AzureDnsPrivateResolver",
+    "AzureDnsInboundEndpoint",
+    "AzureDnsOutboundEndpoint",
+    "AzureDnsForwardingRuleset",
+    "AzureDnsForwardingRule",
+    "AzureDnsForwardingRulesetLink",
 )
 
 
@@ -121,6 +130,7 @@ def verify_azure(schemas) -> None:
             field == "address_space" and relationship.min_count != 1
         ):
             raise ValueError(f"AzureVirtualNetwork.{field} must be required")
+    verify_dns(schemas)
     verify_storage(schemas)
     verify_peering(schemas)
     verify_service_endpoints(schemas)
@@ -186,6 +196,178 @@ def verify_azure(schemas) -> None:
             or relationship.cardinality != cardinality
         ):
             raise ValueError(f"{kind}.{name} must refer to {cardinality} {peer}")
+
+
+def verify_dns(schemas):
+    if __package__:
+        from .check_azure_dns import (
+            DNS_KINDS,
+            RESOLVER_NAME_RE,
+            TAGGABLE,
+            REFERENCES,
+            SCOPES,
+            ZONE,
+            ZONE_LINK,
+            RECORD,
+            RESOLVER,
+            INBOUND,
+            OUTBOUND,
+            RULESET,
+            RULE,
+            RULESET_LINK,
+        )
+    else:
+        from check_azure_dns import (
+            DNS_KINDS,
+            RESOLVER_NAME_RE,
+            TAGGABLE,
+            REFERENCES,
+            SCOPES,
+            ZONE,
+            ZONE_LINK,
+            RECORD,
+            RESOLVER,
+            INBOUND,
+            OUTBOUND,
+            RULESET,
+            RULE,
+            RULESET_LINK,
+        )
+    if __package__:
+        from .dns_zone_catalog import choices
+    else:
+        from dns_zone_catalog import choices
+    zone = schemas[ZONE]
+    selection = zone.get_attribute("zone_selection")
+    if (
+        selection.kind != "Dropdown"
+        or selection.optional
+        or {c["name"] for c in selection.choices or []} != {"custom", *choices()}
+    ):
+        raise ValueError(
+            "Private DNS zone selection must expose the pinned Azure catalog and Custom"
+        )
+    if (
+        not zone.get_attribute("name").read_only
+        or not zone.get_attribute("custom_name").optional
+    ):
+        raise ValueError(
+            "Private DNS zone names must be computed from selection or custom input"
+        )
+    for kind in DNS_KINDS:
+        node = schemas[kind]
+        expected = (
+            {"AzureTaggable"}
+            if kind == ZONE
+            else {"AzureResource", "AzureTaggable"}
+            if kind in {RESOLVER, RULESET}
+            else set()
+        )
+        if set(node.inherit_from) != expected:
+            raise ValueError(f"{kind} has invalid DNS inheritance")
+        if kind == ZONE and node.get_relationship_or_none("location"):
+            raise ValueError("Private DNS zones must be global without a region")
+        name, key = node.get_attribute("name"), node.get_attribute("name_key")
+        if (
+            name.kind != "Text"
+            or name.optional
+            or name.unique
+            or name.min_length != 1
+            or name.max_length != (253 if kind in {ZONE, RECORD} else 80)
+        ):
+            raise ValueError(f"{kind}.name has invalid DNS constraints")
+        if (
+            kind in {RESOLVER, INBOUND, OUTBOUND, RULESET}
+            and name.regex != RESOLVER_NAME_RE
+        ):
+            raise ValueError(f"{kind}.name must enforce resolver naming rules")
+        if key.kind != "Text" or key.optional or not key.read_only or key.unique:
+            raise ValueError(f"{kind}.name_key must be required read-only scoped Text")
+        uniqueness = [[SCOPES[kind], "name_key__value"]]
+        if kind == RECORD:
+            uniqueness[0].append("record_type__value")
+        if kind in {ZONE_LINK, RULESET_LINK}:
+            uniqueness.append([SCOPES[kind], "virtual_network"])
+        if kind == RESOLVER:
+            uniqueness.append(["virtual_network"])
+        if kind in {INBOUND, OUTBOUND}:
+            uniqueness.append(["subnet"])
+        if kind == RULE:
+            uniqueness.append(["ruleset", "domain_key__value"])
+        if node.uniqueness_constraints != uniqueness:
+            raise ValueError(f"{kind} has invalid DNS uniqueness")
+        for field, peer in REFERENCES[kind].items():
+            r = node.get_relationship(field)
+            relkind = "Parent" if field == SCOPES[kind] else "Attribute"
+            if (r.peer, r.cardinality, r.optional, r.kind) != (
+                peer,
+                "one",
+                False,
+                relkind,
+            ):
+                raise ValueError(f"{kind}.{field} has invalid DNS relationship")
+    for kind, field in [(RECORD, "records"), (RULE, "target_servers")]:
+        a = schemas[kind].get_attribute(field)
+        if a.kind != "JSON" or a.optional:
+            raise ValueError(f"{kind}.{field} must be required JSON")
+    for kind, field, choices, default in [
+        (RECORD, "record_type", {"A", "AAAA", "CNAME", "TXT"}, None),
+        (INBOUND, "allocation_method", {"Static", "Dynamic"}, "Dynamic"),
+    ]:
+        a = schemas[kind].get_attribute(field)
+        if (
+            a.kind != "Dropdown"
+            or {c["name"] for c in a.choices or []} != choices
+            or a.default_value != default
+        ):
+            raise ValueError(f"{kind}.{field} has invalid DNS choices/default")
+    for kind, field, default in [
+        (ZONE_LINK, "registration_enabled", False),
+        (RULE, "enabled", True),
+    ]:
+        a = schemas[kind].get_attribute(field)
+        if a.kind != "Boolean" or a.default_value is not default:
+            raise ValueError(f"{kind}.{field} has invalid Boolean/default")
+    ttl = schemas[RECORD].get_attribute("ttl")
+    if ttl.kind != "Number" or ttl.default_value != 3600:
+        raise ValueError("DNS record TTL must default to 3600 seconds")
+    address = schemas[INBOUND].get_relationship("ip_address")
+    if (address.peer, address.cardinality, address.optional, address.kind) != (
+        "BuiltinIPAddress",
+        "one",
+        True,
+        "Attribute",
+    ):
+        raise ValueError("Inbound endpoint IPAM address must be an optional reference")
+    endpoints = schemas[RULESET].get_relationship("outbound_endpoints")
+    if (
+        endpoints.peer,
+        endpoints.cardinality,
+        endpoints.optional,
+        endpoints.kind,
+        endpoints.min_count,
+        endpoints.max_count,
+    ) != (OUTBOUND, "many", False, "Attribute", 1, 2):
+        raise ValueError("DNS ruleset must reference one or two outbound endpoints")
+    for parent, field, child, back in [
+        (ZONE, "links", ZONE_LINK, "zone"),
+        (ZONE, "record_sets", RECORD, "zone"),
+        (RESOLVER, "inbound_endpoints", INBOUND, "resolver"),
+        (RESOLVER, "outbound_endpoints", OUTBOUND, "resolver"),
+        (RULESET, "rules", RULE, "ruleset"),
+        (RULESET, "links", RULESET_LINK, "ruleset"),
+    ]:
+        r = schemas[parent].get_relationship(field)
+        if (r.peer, r.kind, r.cardinality, r.optional) != (
+            child,
+            "Component",
+            "many",
+            True,
+        ) or r.identifier != schemas[child].get_relationship(back).identifier:
+            raise ValueError(f"{parent}.{field} has invalid DNS child relationship")
+    for kind in TAGGABLE:
+        if schemas[kind].get_relationship("tags").peer != "AzureTag":
+            raise ValueError(f"{kind} must support Azure tags")
 
 
 def verify_storage(schemas):
@@ -630,6 +812,9 @@ def verify_tags(schemas) -> None:
         "AzureNetworkSecurityGroup",
         "AzureRouteTable",
         "AzureStorageAccount",
+        "AzurePrivateDnsZone",
+        "AzureDnsPrivateResolver",
+        "AzureDnsForwardingRuleset",
     }
     for kind in (*supported, "AzureTaggable"):
         rel = schemas[kind].get_relationship_or_none("tags")
