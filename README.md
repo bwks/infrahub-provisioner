@@ -12,7 +12,8 @@ read-only verification of the deployed models and Azure hierarchy, and a
 create-only seed workflows for Azure intent and cloud locations. Infrahub `main`
 contains the `fake-corp` tenant, 13 management groups, 12 subscriptions with Azure
 GUIDs pending, the 57-region reference catalog, and the planned Connectivity
-resource group `rg-conn-prd-network`. Other Azure resource inventories are empty.
+resource group `rg-conn-prd-network`, and its planned hub VNet `vnet-conn-prd-hub`
+using `10.150.0.0/24` in the default IP namespace. Subnets remain empty.
 
 The upstream base and VRF schemas are deployed on the lab’s `main` branch after
 validation and merge of `upstream-ipam`. No sample or operational objects were loaded during schema setup.
@@ -903,6 +904,60 @@ the existing namespace plus 19 prefixes matched. VNets and subnets remain empty.
 All 297 offline tests passed, including upstream hash verification, alongside Ruff
 lint and formatting checks. Invalid-name and constraint scenarios used offline
 fixtures; no live test objects were created.
+
+## Connectivity hub VNet seed
+
+`data/azure_hub_vnet.yaml` declares `vnet-conn-prd-hub` in fake-corp / Connectivity /
+`rg-conn-prd-network`, in Australia East, initially Planned. Its address space is
+`10.150.0.0/24` in the existing `default` IP namespace. The new prefix starts Reserved
+(IPAM does not have a Planned choice), is not an allocation pool, and appears below
+`10.0.0.0/8` in the native IPAM hierarchy. The original 19-prefix reference catalog
+remains managed separately by `data/ipam.yaml`.
+
+`uv run python scripts/seed_azure_virtual_network.py --branch <branch>` previews
+one VNet catalog; `--apply` creates missing records and `--data` selects another
+catalog. The YAML root `virtual_network` requires name, tenant, subscription,
+resource_group, region, status, namespace, and a nonempty address_space CIDR list.
+The namespace, resource group, subscription, tenant, and region must already exist
+and resolve uniquely. Prefix identity is namespace plus canonical CIDR; VNet
+identity is resource group plus case-insensitive name.
+
+All preflight checks complete before writes. Conflicting existing VNet names,
+regions, or address-space assignments stop the run. Existing prefix pool or VRF
+assignments also stop it. Other modeled VNet address spaces must not overlap the
+requested ranges in the same namespace; parent catalog containers are allowed.
+This is a seed preflight rule, not automatic UI/API overlap enforcement or a
+complete Azure address-range validator.
+
+Create missing prefixes first, then the VNet. Reruns preserve operational status,
+tags, and prefix descriptions; they never move, update, or delete records. Initial
+status and prefix description are creation-only. Partial failures are not rolled
+back; inspect the branch and rerun with one writer. Exit 0 means successful preview
+or apply; exit 1 means invalid input, conflict, or read/write failure.
+No tags, subnets, Azure GUIDs, or deployed Azure resources are created.
+
+Validated and merged using:
+
+```sh
+uv run infrahubctl branch create connectivity-hub-vnet
+uv run python scripts/seed_azure_virtual_network.py --branch connectivity-hub-vnet
+uv run python scripts/seed_azure_virtual_network.py --branch connectivity-hub-vnet --apply
+uv run python scripts/seed_azure_virtual_network.py --branch connectivity-hub-vnet --apply
+uv run python scripts/verify_schema.py --branch connectivity-hub-vnet
+uv run python scripts/check_azure_tags.py --branch connectivity-hub-vnet
+INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge connectivity-hub-vnet
+uv run python scripts/seed_azure_virtual_network.py --branch main
+uv run python scripts/seed_ipam.py --branch main
+uv run python scripts/verify_schema.py --branch main
+```
+
+First apply created two records; the unchanged rerun created zero. Field reads
+confirmed resource-group and region membership, Planned VNet status, Reserved
+prefix status, and native parent `10.0.0.0/8`. Existing prefix, resource-group, and
+tag IDs were preserved. On `main`, both seed previews and schema verification
+passed, and the new VNet/prefix IDs and parentage were preserved. There are now
+20 IPAM prefixes, one VNet, and zero subnets. All 322 offline tests and Ruff checks
+passed. No schema changes were needed.
 
 ## Source of truth and project boundaries
 

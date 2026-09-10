@@ -368,3 +368,20 @@ The fake-corp catalog is deployed to Infrahub `main` after validation and merge 
 - Schema constraints do not validate address overlap, subnet containment, or Azure
   deployment readiness. DNS, peering, subnet enhancements, identifiers, allocation,
   seeding, and deployment remain deferred. Keep scenario fixtures offline.
+
+
+## Connectivity hub VNet seed
+
+- `data/azure_hub_vnet.yaml` owns the agreed vnet-conn-prd-hub in fake-corp /
+  Connectivity / rg-conn-prd-network, Australia East, with 10.150.0.0/24 in default.
+  The VNet starts Planned and its new prefix Reserved. No tags or subnets are seeded.
+- `uv run python scripts/seed_azure_virtual_network.py --branch <branch>` previews
+  one VNet; `--apply` creates missing prefixes then the VNet, and `--data` selects YAML.
+- Require existing unique dependencies. Match prefixes by namespace/canonical CIDR
+  and VNets by resource-group/case-insensitive name. Preflight all conflicts before
+  writes, including same-namespace overlap with other modeled VNets; allow native
+  parent containers such as the catalog's 10/8. This is not a general Azure validator.
+- Preserve status, tags, and prefix descriptions on reruns. Never move/delete or
+  overwrite existing records. Inspect partial failures and rerun with one writer.
+- The 19 reference prefixes remain in data/ipam.yaml; the operational hub prefix
+  is owned by the VNet catalog. Verify both previews and native prefix parentage.

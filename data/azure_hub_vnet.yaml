@@ -1,0 +1,11 @@
+# Agreed Connectivity hub intent; no Azure deployment is performed.
+virtual_network:
+  name: vnet-conn-prd-hub
+  tenant: fake-corp
+  subscription: Connectivity
+  resource_group: rg-conn-prd-network
+  region: australiaeast
+  status: planned
+  namespace: default
+  address_space:
+    - 10.150.0.0/24
