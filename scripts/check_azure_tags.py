@@ -8,7 +8,13 @@ import typer
 from infrahub_sdk import InfrahubClientSync
 
 app = typer.Typer(help=__doc__, add_completion=False, pretty_exceptions_enable=False)
-OWNER_KINDS = ("AzureSubscription", "AzureResourceGroup", "AzureVirtualNetwork")
+OWNER_KINDS = (
+    "AzureSubscription",
+    "AzureResourceGroup",
+    "AzureVirtualNetwork",
+    "AzureNetworkSecurityGroup",
+    "AzureRouteTable",
+)
 INVALID_KEY_CHARACTERS = set("<>%&\\?/")
 
 

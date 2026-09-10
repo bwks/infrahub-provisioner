@@ -306,7 +306,7 @@ revision as the base and VRF schemas. It adds these models:
 VNet address space and subnet prefixes reference `BuiltinIPPrefix`, which includes
 our `IpamPrefix` records. This step creates no Azure objects or operational IP
 allocations and requires no Azure credentials. The extension is experimental and
-is not a complete Azure deployment model: VMs, NICs, NSGs, route tables, and other
+is not a complete Azure deployment model: VMs, NICs, and other
 resource types are not included.
 
 Use the existing environment and commands to validate the complete schema set:
@@ -323,7 +323,7 @@ uv run python scripts/seed_ipam.py --branch azure-schema
 
 The second load should make no changes, the check should show no diff, and the
 seed preview should report all 20 catalog objects matching. The verifier now
-requires both IPAM and Azure models and queries all seven Azure node types.
+requires both IPAM and Azure models and queries every supported Azure node type.
 After validation, merge and inspect the destination:
 
 ```sh
@@ -712,7 +712,7 @@ the original tenant, management-group, namespace, and prefix IDs were preserved.
 ## Azure key/value tags
 
 `schemas/local/resource_tags.yml` adds `AzureTag` assignments owned by one
-subscription, resource group, or virtual network through the `AzureTaggable`
+subscription, resource group, virtual network, NSG, or route table through the `AzureTaggable`
 generic. The extension sorts after the other local Azure extensions so their
 relationships and the added inheritance are composed together. Vendored schemas
 remain unchanged. Azure Tags are available at `/objects/AzureTag`.
@@ -722,6 +722,8 @@ classDiagram
     AzureTaggable <|-- AzureSubscription
     AzureTaggable <|-- AzureResourceGroup
     AzureTaggable <|-- AzureVirtualNetwork
+    AzureTaggable <|-- AzureNetworkSecurityGroup
+    AzureTaggable <|-- AzureRouteTable
     AzureResource <|-- AzureVirtualNetwork
     AzureTaggable "1" *-- "0..50" AzureTag : tags
     class AzureTag {
@@ -738,7 +740,8 @@ These are documentation examples, not seeded values. No tag values are created b
 this change. Existing seed workflows preserve operational tag assignments.
 
 Subscriptions and resource groups do not automatically propagate tags to children.
-Tenants, management groups, regions, and subnets do not receive Azure tag support.
+Tenants, management groups, regions, subnets, security rules, and routes do not
+receive Azure tag support.
 Regions and location groups retain their separate `BuiltinTag` label relationships;
 those are Infrahub classification labels, not Azure key/value assignments. The
 existing hierarchy, ownership, region, and IPAM relationships remain intact.
@@ -879,7 +882,7 @@ other resource groups; displayed names retain their case.
 
 These are schema constraints enforced on writes. They do not establish deployment
 readiness: overlap, subnet containment, and Azure-specific address-range checks
-remain deferred, alongside DNS, peering, subnet enhancements, Azure identifiers,
+remain deferred, alongside DNS, peering, further subnet configuration, Azure identifiers,
 allocation, seeding, and deployment. Existing IPAM catalog prefixes are unchanged;
 this schema change creates no VNet, subnet, prefix, or tag records.
 
@@ -959,6 +962,111 @@ passed, and the new VNet/prefix IDs and parentage were preserved. There are now
 20 IPAM prefixes, one VNet, and zero subnets. All 322 offline tests and Ruff checks
 passed. No schema changes were needed.
 
+## Subnets and custom network policy
+
+`schemas/local/network_policy.yml` strengthens `AzureVirtualNetworkSubnet` and adds
+`AzureNetworkSecurityGroup`, `AzureNetworkSecurityRule`, `AzureRouteTable`, and
+`AzureRoute`. The pinned library's security and routing modules target firewall
+policies and device routing; these local models describe Azure resource ownership
+and configuration. All vendored files remain unchanged.
+
+| Object | Ownership and configuration |
+| --- | --- |
+| Subnet | One VNet; at least one existing IPAM prefix; optional single NSG and route table |
+| NSG | One resource group and required Region; owned custom rules; reverse subnet list |
+| Security rule | One NSG; priority, direction, access, protocol, source/destination addresses and ports |
+| Route table | One resource group and required Region; owned user-defined routes; reverse subnet list |
+| Route | One route table; destination and next-hop type; optional next-hop IP |
+
+NSGs and route tables inherit AzureResource and AzureTaggable. All five types have
+lifecycle status defaulting to Planned. Subnets derive region and subscription from
+the VNet; rules and routes derive context through their parent. No Azure tag support
+is added to these child types. Region is independent of resource-group location.
+The subnet API type/route is preserved; new object pages use the new API type names,
+for example `/objects/AzureNetworkSecurityGroup` and `/objects/AzureRouteTable`.
+
+Names use Azure's 1–80 character network-resource naming rules, with required
+read-only computed lowercase name_key. Uniqueness is scoped to the parent: subnet
+within VNet, NSG/route table within resource group, rule within NSG, and route within
+route table. Rules have an additional uniqueness constraint on NSG, direction, and
+priority, and are ordered by direction then priority. Priority bounds are 100–4096.
+These naming, required-field, cardinality, numeric-bound, and uniqueness constraints
+are schema-level enforcement on writes.
+
+Security rules use `inbound`/`outbound`, `allow`/`deny`, and protocols `any`, `tcp`,
+`udp`, `icmp`, `esp`, or `ah`. Required Text source_addresses and destination_addresses
+accept `*`, one service-tag identifier, or comma-separated IPs/canonical CIDRs.
+Required Text source_ports and destination_ports accept `*`, individual ports, or
+comma-separated ports/ranges such as `80,443,1000-2000`. Surrounding item whitespace
+is ignored during validation. Wildcards and service tags cannot be mixed with
+other entries. Descriptions are optional and limited to 140 characters.
+
+Routes use Text address_prefix for one canonical destination CIDR or service tag,
+and next_hop_type values `internet`, `none`, `virtual_appliance`,
+`virtual_network_gateway`, or `vnet_local`. Virtual Appliance requires a valid IP in
+next_hop_ip_address; all other supported next hops require that field to be unset.
+Policy address expressions do not allocate IPAM prefixes or IP addresses.
+Route-table disable_bgp_route_propagation defaults to false, leaving propagation enabled.
+
+```sh
+uv run python scripts/check_azure_networks.py --branch <branch>
+```
+
+The read-only validator pages both object inventories and nested prefix links. It
+reports affected names/IDs and all discovered findings. Exit 0 means valid (including
+an explicitly empty network inventory); exit 1 means invalid data or read failure.
+It checks required references and scoped names; subnet CIDR containment within a
+same-family, same-namespace VNet prefix; overlapping sibling or intra-subnet ranges;
+NSG/route-table subscription and region matching the subnet's VNet; integer rule
+priorities and direction collisions; address/port syntax; and next-hop combinations.
+NSGs and route tables may be shared across resource groups in the same subscription
+and region. Existing parent prefix containers are not treated as subnet overlaps.
+
+These cross-object and expression checks are CLI gates, not automatic UI/API write
+checks. Service tags are checked syntactically only; existence and feature-specific
+support require future Azure discovery. Validation does not prove deployment
+readiness, reserved-subnet feature compatibility, connectivity, or effective policy.
+
+No Azure default rules, system routes, infrastructure records, or reference catalogs
+are created by this change. Default mapping, ASGs, NIC associations, ECMP, learned
+routes, subnet delegation, service endpoints, private-endpoint policies, effective
+routing/security evaluation, Azure synchronization, and deployment remain deferred.
+The hub VNet and its /24 allocation remain intact; choosing actual subnets is a
+separate seed task.
+
+Sources: [Azure naming rules](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules),
+[NSG rules](https://learn.microsoft.com/en-us/azure/templates/microsoft.network/networksecuritygroups/securityrules),
+[route configuration](https://learn.microsoft.com/en-us/azure/templates/microsoft.network/routetables/routes),
+and [route-table associations](https://learn.microsoft.com/en-us/azure/virtual-network/manage-route-table).
+
+Validated on the `azure-network-policy` branch: compatibility check passed without
+warnings, load and schema/network verification passed, and unchanged reload needed
+no changes. Verified commands:
+
+```sh
+uv run python scripts/check_schema.py --branch azure-network-policy
+uv run infrahubctl schema load schemas --branch azure-network-policy --wait 30
+uv run python scripts/verify_schema.py --branch azure-network-policy
+uv run python scripts/check_azure_networks.py --branch azure-network-policy
+INFRAHUB_TIMEOUT=180 uv run infrahubctl branch merge azure-network-policy
+uv run python scripts/check_schema.py --branch main
+uv run python scripts/verify_schema.py --branch main
+uv run python scripts/check_azure_networks.py --branch main
+uv run python scripts/check_azure_tags.py --branch main
+uv run python scripts/seed_azure_virtual_network.py --branch main
+uv run python scripts/seed_azure_resource_groups.py --branch main
+uv run python scripts/seed_ipam.py --branch main
+```
+
+After merge, `main` had an empty schema diff, passing schema/network/tag checks,
+and matching hub, resource-group, and IPAM previews. Existing object IDs, tag values,
+and the hub prefix's native parent were preserved. All five subnet/policy inventories
+remain empty. All 432 offline tests passed, including naming/priority boundaries,
+multi-value rule parsing, route validation, dual-stack containment, namespace and
+association conflicts, nested pagination, CLI failure behavior, and upstream hash
+verification. Ruff lint and formatting checks passed. No live scenario fixtures
+were created and no duplicate-write rejection tests were run against live data.
+
 ## Source of truth and project boundaries
 
 Git holds schema definitions and bootstrap configuration. Infrahub holds operational
@@ -981,7 +1089,7 @@ upstream Azure extension supplies the initial schema, without cloud synchronizat
 or deployment execution.
 
 Optional future models include organization/ownership, locations, environment and
-tagging conventions, and service/application ownership. Security policies,
+tagging conventions, and service/application ownership. Broader security policies,
 connectivity models, and automatic IP allocation remain future candidates.
 
 ## Documentation maintenance

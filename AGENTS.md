@@ -150,7 +150,7 @@ Useful optional additions, introduced only when needed:
 
 Use unmodified upstream modules for later additions as well. The required base
 already supplies organization/location foundations; further optional extensions
-remain deferred. Security policies, connectivity models, and automatic IP
+remain deferred. Broader security policies, connectivity models, and automatic IP
 allocation remain future candidates, not initial scope.
 
 ## Validation expectations
@@ -240,8 +240,9 @@ after it was empty. The original default namespace and its designation remain.
 
 ## Azure lifecycle status
 
-- `schemas/local/azure_status.yml` supplies status dropdowns on all seven
+- `schemas/local/azure_status.yml` supplies status dropdowns on the original seven
   Azure node types, plus the resource and management-group hierarchy generics.
+  Network policy reuses these choices for NSGs, route tables, rules, and routes.
   Options are Planned, Active, Reserved, Deprecated, and Unmanaged. Regions
   (`AzureRegion`) default to Unmanaged because they are Azure-managed reference
   configuration; other Azure types default to Planned.
@@ -314,7 +315,8 @@ The fake-corp catalog is deployed to Infrahub `main` after validation and merge 
 
 - `schemas/local/resource_tags.yml` adds AzureTaggable inheritance to subscriptions,
   resource groups, and VNets. Keep it after the other local Azure extensions in
-  schema discovery order; verify all three owner types on the live composed schema.
+  schema discovery order; verify all owner types on the live composed schema.
+  Network policy adds NSG and route-table owners through the same generic.
 - AzureTag is an independently owned key/value assignment, with one owner and no
   shared-value propagation. Existing BuiltinTag labels remain separate and intact.
   Do not add Azure tags to tenants, management groups, regions, or subnets.
@@ -366,7 +368,7 @@ The fake-corp catalog is deployed to Infrahub `main` after validation and merge 
   and uniqueness compliance. Migrate populated deployments deliberately; never
   invent address space or bypass required relationships to load a schema.
 - Schema constraints do not validate address overlap, subnet containment, or Azure
-  deployment readiness. DNS, peering, subnet enhancements, identifiers, allocation,
+  deployment readiness. DNS, peering, further subnet configuration, identifiers, allocation,
   seeding, and deployment remain deferred. Keep scenario fixtures offline.
 
 
@@ -385,3 +387,28 @@ The fake-corp catalog is deployed to Infrahub `main` after validation and merge 
   overwrite existing records. Inspect partial failures and rerun with one writer.
 - The 19 reference prefixes remain in data/ipam.yaml; the operational hub prefix
   is owned by the VNet catalog. Verify both previews and native prefix parentage.
+
+
+## Subnets and network policy
+
+- `schemas/local/network_policy.yml` strengthens AzureVirtualNetworkSubnet and adds
+  AzureNetworkSecurityGroup, AzureNetworkSecurityRule, AzureRouteTable, and AzureRoute.
+  NSGs/route tables inherit AzureResource and AzureTaggable; children have their own
+  Planned lifecycle status but no duplicated region/resource-group or Azure tags.
+- Subnets require a VNet and at least one BuiltinIPPrefix, with optional single NSG
+  and route-table associations. Shared associations across resource groups are valid
+  when VNet subscription and region match. Preserve API names and native IPAM.
+- Scope computed lowercase name uniqueness to the owning parent. Custom rule
+  priorities are 100–4096 and unique per NSG/direction; no default rules are modeled.
+- `uv run python scripts/check_azure_networks.py --branch <branch>` is a read-only
+  gate with top-level and nested-prefix pagination. It checks subnet containment,
+  namespace and overlap, association context, required references, scoped identity,
+  rule expressions, and route next-hop combinations. Exit 0 valid/empty; 1 invalid
+  or read failure. Do not claim CLI-only checks enforce UI/API writes.
+- Expression Text fields accept documented comma-separated IPs/CIDRs and ports/ranges,
+  a single service tag, or wildcard where applicable. Validate service-tag syntax
+  only; no live catalog lookup. Routing/security expressions are not IPAM allocations.
+- BGP route propagation is enabled by default. Next-hop IP is required only for
+  Virtual Appliance. No ECMP, ASGs, default rules/system routes, effective-policy
+  calculation, or Azure deployment. Keep fixtures offline and seed nothing until
+  actual subnet/policy intent is explicitly requested.

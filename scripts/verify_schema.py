@@ -16,6 +16,10 @@ AZURE_NODES = (
     "AzureResourceGroup",
     "AzureVirtualNetwork",
     "AzureVirtualNetworkSubnet",
+    "AzureNetworkSecurityGroup",
+    "AzureNetworkSecurityRule",
+    "AzureRouteTable",
+    "AzureRoute",
 )
 
 
@@ -111,6 +115,7 @@ def verify_azure(schemas) -> None:
             field == "address_space" and relationship.min_count != 1
         ):
             raise ValueError(f"AzureVirtualNetwork.{field} must be required")
+    verify_network_policy(schemas)
     group = schemas["AzureManagementGroup"]
     if (
         group.hierarchy != "AzureManagementGroupHierarchy"
@@ -173,6 +178,162 @@ def verify_azure(schemas) -> None:
             raise ValueError(f"{kind}.{name} must refer to {cardinality} {peer}")
 
 
+def verify_network_policy(schemas):
+    parents = {
+        "AzureVirtualNetworkSubnet": ("virtualnetwork", "AzureVirtualNetwork"),
+        "AzureNetworkSecurityGroup": ("resourcegroup", "AzureResourceGroup"),
+        "AzureRouteTable": ("resourcegroup", "AzureResourceGroup"),
+        "AzureNetworkSecurityRule": (
+            "network_security_group",
+            "AzureNetworkSecurityGroup",
+        ),
+        "AzureRoute": ("route_table", "AzureRouteTable"),
+    }
+
+    def relationship(kind, name, peer, cardinality, optional):
+        r = schemas[kind].get_relationship_or_none(name)
+        if r is None or (r.peer, r.cardinality, r.optional) != (
+            peer,
+            cardinality,
+            optional,
+        ):
+            raise ValueError(f"{kind}.{name} has an invalid network relationship")
+        return r
+
+    for kind, (parent, peer) in parents.items():
+        node = schemas[kind]
+        if [parent, "name_key__value"] not in (node.uniqueness_constraints or []):
+            raise ValueError(f"{kind} must scope name uniqueness to {parent}")
+        key = node.get_attribute_or_none("name_key")
+        if (
+            key is None
+            or key.kind != "Text"
+            or key.optional
+            or key.unique
+            or not key.read_only
+        ):
+            raise ValueError(f"{kind}.name_key must be required read-only scoped Text")
+        name = node.get_attribute("name")
+        if (
+            name.optional
+            or name.unique
+            or name.min_length != 1
+            or name.max_length != 80
+            or name.regex != r"^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z"
+        ):
+            raise ValueError(f"{kind}.name must follow Azure naming rules")
+        if relationship(kind, parent, peer, "one", False).kind != "Parent":
+            raise ValueError(f"{kind}.{parent} must be Parent")
+    for kind in ("AzureNetworkSecurityGroup", "AzureRouteTable"):
+        if set(schemas[kind].inherit_from) != {"AzureResource", "AzureTaggable"}:
+            raise ValueError(f"{kind} must inherit AzureResource and AzureTaggable")
+        if (
+            relationship(kind, "location", "AzureRegion", "one", False).label
+            != "Region"
+        ):
+            raise ValueError(f"{kind}.location must be labeled Region")
+    sub = "AzureVirtualNetworkSubnet"
+    if (
+        relationship(
+            sub, "address_prefixes", "BuiltinIPPrefix", "many", False
+        ).min_count
+        != 1
+    ):
+        raise ValueError(
+            "AzureVirtualNetworkSubnet.address_prefixes must require at least one prefix"
+        )
+    for field, kind in [
+        ("network_security_group", "AzureNetworkSecurityGroup"),
+        ("route_table", "AzureRouteTable"),
+    ]:
+        forward = relationship(sub, field, kind, "one", True)
+        reverse = relationship(kind, "subnets", sub, "many", True)
+        if not forward.identifier or forward.identifier != reverse.identifier:
+            raise ValueError(f"{kind}.subnets must reverse the subnet association")
+    for kind, field, child in [
+        ("AzureNetworkSecurityGroup", "rules", "AzureNetworkSecurityRule"),
+        ("AzureRouteTable", "routes", "AzureRoute"),
+    ]:
+        if relationship(kind, field, child, "many", True).kind != "Component":
+            raise ValueError(f"{kind}.{field} must own child records")
+    rule = schemas["AzureNetworkSecurityRule"]
+    if [
+        "network_security_group",
+        "direction__value",
+        "priority__value",
+    ] not in rule.uniqueness_constraints:
+        raise ValueError(
+            "AzureNetworkSecurityRule must scope priority uniqueness to NSG and direction"
+        )
+    if rule.order_by != ["direction__value", "priority__value"]:
+        raise ValueError(
+            "AzureNetworkSecurityRule must order by direction and priority"
+        )
+    for kind, attrs in {
+        "AzureNetworkSecurityRule": {
+            "priority": "Number",
+            "source_addresses": "Text",
+            "destination_addresses": "Text",
+            "source_ports": "Text",
+            "destination_ports": "Text",
+        },
+        "AzureRoute": {"address_prefix": "Text"},
+    }.items():
+        for field, expected in attrs.items():
+            a = schemas[kind].get_attribute_or_none(field)
+            if a is None or a.kind != expected or a.optional:
+                raise ValueError(f"{kind}.{field} must be required {expected}")
+    for kind, field, choices in [
+        ("AzureNetworkSecurityRule", "direction", {"inbound", "outbound"}),
+        ("AzureNetworkSecurityRule", "access", {"allow", "deny"}),
+        (
+            "AzureNetworkSecurityRule",
+            "protocol",
+            {"any", "tcp", "udp", "icmp", "esp", "ah"},
+        ),
+        (
+            "AzureRoute",
+            "next_hop_type",
+            {
+                "internet",
+                "none",
+                "virtual_appliance",
+                "virtual_network_gateway",
+                "vnet_local",
+            },
+        ),
+    ]:
+        a = schemas[kind].get_attribute_or_none(field)
+        if (
+            a is None
+            or a.kind != "Dropdown"
+            or a.optional
+            or {c["name"] for c in a.choices or []} != choices
+        ):
+            raise ValueError(f"{kind}.{field} has invalid choices")
+    for kind, field, maximum in [
+        ("AzureNetworkSecurityRule", "description", 140),
+        ("AzureRoute", "next_hop_ip_address", None),
+    ]:
+        a = schemas[kind].get_attribute_or_none(field)
+        if (
+            a is None
+            or a.kind != "Text"
+            or not a.optional
+            or (maximum is not None and a.max_length != maximum)
+        ):
+            raise ValueError(f"{kind}.{field} has an invalid optional Text definition")
+    propagation = schemas["AzureRouteTable"].get_attribute_or_none(
+        "disable_bgp_route_propagation"
+    )
+    if (
+        propagation is None
+        or propagation.kind != "Boolean"
+        or propagation.default_value is not False
+    ):
+        raise ValueError("AzureRouteTable must enable BGP route propagation by default")
+
+
 def verify_tags(schemas) -> None:
     for kind in ("AzureTag", "AzureTaggable"):
         if kind not in schemas:
@@ -192,7 +353,13 @@ def verify_tags(schemas) -> None:
         or owner.kind != "Parent"
     ):
         raise ValueError("AzureTag.owner must be one required AzureTaggable parent")
-    supported = {"AzureSubscription", "AzureResourceGroup", "AzureVirtualNetwork"}
+    supported = {
+        "AzureSubscription",
+        "AzureResourceGroup",
+        "AzureVirtualNetwork",
+        "AzureNetworkSecurityGroup",
+        "AzureRouteTable",
+    }
     for kind in (*supported, "AzureTaggable"):
         rel = schemas[kind].get_relationship_or_none("tags")
         if (

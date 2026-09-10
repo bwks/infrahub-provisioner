@@ -1,0 +1,345 @@
+# Repository-owned Azure subnet and custom network policy models.
+version: '1.0'
+nodes:
+- name: VirtualNetworkSubnet
+  namespace: Azure
+  label: Subnets
+  menu_placement: AzureResource
+  display_label: name__value
+  uniqueness_constraints:
+  - - virtualnetwork
+    - name_key__value
+  attributes:
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  relationships:
+  - name: address_prefixes
+    peer: BuiltinIPPrefix
+    cardinality: many
+    kind: Attribute
+    optional: false
+    min_count: 1
+  - name: network_security_group
+    peer: AzureNetworkSecurityGroup
+    cardinality: one
+    kind: Attribute
+    optional: true
+    identifier: azure_subnet__nsg
+  - name: route_table
+    peer: AzureRouteTable
+    cardinality: one
+    kind: Attribute
+    optional: true
+    identifier: azure_subnet__route_table
+- name: NetworkSecurityGroup
+  namespace: Azure
+  label: Network Security Groups
+  menu_placement: AzureResource
+  display_label: name__value
+  uniqueness_constraints:
+  - - resourcegroup
+    - name_key__value
+  attributes:
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  relationships:
+  - name: location
+    peer: AzureRegion
+    cardinality: one
+    kind: Attribute
+    optional: false
+    label: Region
+  - name: rules
+    peer: AzureNetworkSecurityRule
+    cardinality: many
+    kind: Component
+    optional: true
+  - name: subnets
+    peer: AzureVirtualNetworkSubnet
+    cardinality: many
+    kind: Generic
+    optional: true
+    identifier: azure_subnet__nsg
+  inherit_from:
+  - AzureResource
+  - AzureTaggable
+- name: NetworkSecurityRule
+  namespace: Azure
+  label: Security Rules
+  menu_placement: AzureResource
+  display_label: name__value
+  uniqueness_constraints:
+  - - network_security_group
+    - name_key__value
+  - - network_security_group
+    - direction__value
+    - priority__value
+  attributes:
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: description
+    kind: Text
+    optional: true
+    parameters:
+      max_length: 140
+  - name: priority
+    kind: Number
+    optional: false
+    parameters:
+      min_value: 100
+      max_value: 4096
+  - name: direction
+    kind: Dropdown
+    optional: false
+    choices:
+    - name: inbound
+      label: Inbound
+    - name: outbound
+      label: Outbound
+  - name: access
+    kind: Dropdown
+    optional: false
+    choices:
+    - name: allow
+      label: Allow
+    - name: deny
+      label: Deny
+  - name: protocol
+    kind: Dropdown
+    optional: false
+    choices:
+    - name: any
+      label: Any
+    - name: tcp
+      label: TCP
+    - name: udp
+      label: UDP
+    - name: icmp
+      label: ICMP
+    - name: esp
+      label: ESP
+    - name: ah
+      label: AH
+  - name: source_addresses
+    kind: Text
+    optional: false
+    description: Use *, one service tag, or comma-separated IP addresses/CIDRs.
+  - name: destination_addresses
+    kind: Text
+    optional: false
+    description: Use *, one service tag, or comma-separated IP addresses/CIDRs.
+  - name: source_ports
+    kind: Text
+    optional: false
+    description: Use * or comma-separated ports/ranges, for example 80,443,1000-2000.
+  - name: destination_ports
+    kind: Text
+    optional: false
+    description: Use * or comma-separated ports/ranges, for example 80,443,1000-2000.
+  relationships:
+  - name: network_security_group
+    peer: AzureNetworkSecurityGroup
+    cardinality: one
+    kind: Parent
+    optional: false
+  order_by:
+  - direction__value
+  - priority__value
+- name: RouteTable
+  namespace: Azure
+  label: Route Tables
+  menu_placement: AzureResource
+  display_label: name__value
+  uniqueness_constraints:
+  - - resourcegroup
+    - name_key__value
+  attributes:
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: disable_bgp_route_propagation
+    label: Disable BGP Route Propagation
+    kind: Boolean
+    optional: true
+    default_value: false
+  relationships:
+  - name: location
+    peer: AzureRegion
+    cardinality: one
+    kind: Attribute
+    optional: false
+    label: Region
+  - name: routes
+    peer: AzureRoute
+    cardinality: many
+    kind: Component
+    optional: true
+  - name: subnets
+    peer: AzureVirtualNetworkSubnet
+    cardinality: many
+    kind: Generic
+    optional: true
+    identifier: azure_subnet__route_table
+  inherit_from:
+  - AzureResource
+  - AzureTaggable
+- name: Route
+  namespace: Azure
+  label: Routes
+  menu_placement: AzureResource
+  display_label: name__value
+  uniqueness_constraints:
+  - - route_table
+    - name_key__value
+  attributes:
+  - name: name
+    kind: Text
+    optional: false
+    parameters:
+      min_length: 1
+      max_length: 80
+      regex: ^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?\Z
+  - name: name_key
+    label: Normalized Name
+    kind: Text
+    read_only: true
+    optional: false
+    computed_attribute:
+      kind: Jinja2
+      jinja2_template: '{{ name__value | lower }}'
+  - name: status
+    label: Status
+    kind: Dropdown
+    optional: true
+    default_value: planned
+    order_weight: 1200
+    choices:
+    - name: planned
+      label: Planned
+      color: '#a855f7'
+      description: Intended configuration that has not yet been provisioned.
+    - name: active
+      label: Active
+      color: '#00d25b'
+      description: Provisioned and in use.
+    - name: reserved
+      label: Reserved
+      color: '#4d90fe'
+      description: Held for future use.
+    - name: deprecated
+      label: Deprecated
+      color: '#e04040'
+      description: Being retired or no longer recommended for use.
+    - name: unmanaged
+      label: Unmanaged
+      color: '#9ca3af'
+      description: Azure-managed reference configuration, outside our provisioning
+        lifecycle.
+  - name: address_prefix
+    kind: Text
+    optional: false
+    description: One canonical destination CIDR or a service-tag identifier; does
+      not allocate IPAM space.
+  - name: next_hop_type
+    kind: Dropdown
+    optional: false
+    choices:
+    - name: internet
+      label: Internet
+    - name: none
+      label: None
+    - name: virtual_appliance
+      label: Virtual Appliance
+    - name: virtual_network_gateway
+      label: Virtual Network Gateway
+    - name: vnet_local
+      label: VNet Local
+  - name: next_hop_ip_address
+    kind: Text
+    optional: true
+    description: Required only for the Virtual Appliance next-hop type.
+  relationships:
+  - name: route_table
+    peer: AzureRouteTable
+    cardinality: one
+    kind: Parent
+    optional: false

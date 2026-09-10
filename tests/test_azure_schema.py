@@ -19,6 +19,7 @@ def schemas():
         Path("schemas/local/azure_management_groups.yml"),
         Path("schemas/local/azure_status.yml"),
         Path("schemas/local/cloud_locations.yml"),
+        Path("schemas/local/network_policy.yml"),
         Path("schemas/local/resource_tags.yml"),
         Path("schemas/local/virtual_networks.yml"),
     ):
@@ -633,8 +634,75 @@ def test_vnet_overrides_do_not_change_other_resource_types(schemas):
     assert schemas["AzureResource"].get_relationship("location").optional
     assert schemas["AzureResource"].get_attribute("name").regex is None
     assert (
-        schemas["AzureVirtualNetworkSubnet"]
+        not schemas["AzureVirtualNetworkSubnet"]
         .get_relationship("address_prefixes")
         .optional
     )
     assert sum(r.name == "location" for r in vnet.relationships) == 1
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "AzureVirtualNetworkSubnet",
+        "AzureNetworkSecurityGroup",
+        "AzureNetworkSecurityRule",
+        "AzureRouteTable",
+        "AzureRoute",
+    ],
+)
+@pytest.mark.parametrize("edit", ["scope", "writable", "name"])
+def test_network_schema_identity(schemas, kind, edit):
+    node = schemas[kind]
+    if edit == "scope":
+        node.uniqueness_constraints = []
+    elif edit == "writable":
+        node.get_attribute("name_key").read_only = False
+    else:
+        node.get_attribute("name").max_length = 81
+    with pytest.raises(ValueError, match=kind):
+        verify_azure(schemas)
+
+
+@pytest.mark.parametrize(
+    "kind,field",
+    [
+        ("AzureNetworkSecurityGroup", "location"),
+        ("AzureRouteTable", "location"),
+        ("AzureVirtualNetworkSubnet", "address_prefixes"),
+    ],
+)
+def test_network_schema_required_links(schemas, kind, field):
+    schemas[kind].get_relationship(field).optional = True
+    with pytest.raises(ValueError, match=kind):
+        verify_azure(schemas)
+
+
+def test_network_schema_priority_parameters_and_computation():
+    from jinja2 import Environment
+
+    definitions = yaml.safe_load(Path("schemas/local/network_policy.yml").read_text())[
+        "nodes"
+    ]
+    rule = next(n for n in definitions if n["name"] == "NetworkSecurityRule")
+    priority = next(a for a in rule["attributes"] if a["name"] == "priority")
+    assert priority["parameters"] == {"min_value": 100, "max_value": 4096}
+    for node in definitions:
+        key = next(a for a in node["attributes"] if a["name"] == "name_key")
+        assert key["computed_attribute"]["kind"] == "Jinja2"
+        template = Environment().from_string(
+            key["computed_attribute"]["jinja2_template"]
+        )
+        assert template.render(name__value="MiXeD_Name") == "mixed_name"
+
+
+@pytest.mark.parametrize("kind", ["AzureNetworkSecurityGroup", "AzureRouteTable"])
+def test_network_tag_owners(schemas, kind):
+    from scripts.check_azure_tags import Tag, validate
+    from scripts.verify_schema import verify_tags
+
+    verify_tags(schemas)
+    assert (
+        validate([Tag("tag", "Environment", "Production", "owner")], {"owner": kind})
+        == []
+    )
