@@ -152,6 +152,6 @@ spec:
             kind: AzureRegion
           - namespace: Azuremenu
             name: Tags
-            label: Tags
+            label: K/V Tags
             icon: mdi:tag-outline
             kind: AzureTag

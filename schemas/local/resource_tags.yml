@@ -6,6 +6,7 @@ generics:
     include_in_menu: false
     relationships:
       - name: tags
+        label: K/V Tags
         peer: AzureTag
         cardinality: many
         kind: Component
@@ -15,7 +16,7 @@ generics:
 nodes:
   - name: Tag
     namespace: Azure
-    label: Tags
+    label: K/V Tags
     menu_placement: AzureResource
     display_label: '{{ key__value }}={{ value__value }}'
     uniqueness_constraints:

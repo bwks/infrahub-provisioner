@@ -662,3 +662,8 @@ requires an actual Boolean value for all eight settings and rejects null values.
   unchanged branch reloads, and unchanged main schema reload passed. All 131
   existing objects and 26 prefixes were preserved; all six new inventories remain
   empty. Firewall/network/Virtual WAN/DNS/tag/storage gates and IPAM preview passed.
+
+Cloud key/value tags display as **K/V Tags** in the Azure menu, object title,
+and resource relationship fields. Infrahub built-in **Tags** remain unchanged.
+This is display terminology only: `AzureTag`, the `tags` relationship,
+and `/objects/AzureTag` retain their existing API names and URL.

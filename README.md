@@ -1822,3 +1822,8 @@ WAN/DNS/tag/storage gates, and IPAM catalog preview passed. All 131 existing obj
 IDs, attributes, and relationships were preserved, including the private DNS zone
 and 26 prefixes. All six new inventories remain empty; no infrastructure data
 or Azure resources were created.
+
+Cloud key/value tags display as **K/V Tags** in the Azure menu, object title,
+and resource relationship fields. Infrahub built-in **Tags** remain unchanged.
+This is display terminology only: `AzureTag`, the `tags` relationship,
+and `/objects/AzureTag` retain their existing API names and URL.
